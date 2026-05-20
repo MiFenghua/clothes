@@ -4,22 +4,37 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from app.agents.graph import StyleAgentGraph
-from app.providers.persistence import InMemoryTaskRepository, InMemoryWardrobeRepository, TaskRepository
+from app.providers.persistence import (
+    FavoritesRepository,
+    InMemoryFavoritesRepository,
+    InMemoryTaskRepository,
+    InMemoryWardrobeRepository,
+    TaskRepository,
+    WardrobeRepository,
+)
 from app.providers.tracing import InMemoryTraceRecorder
 from app.schemas.domain import StyleTaskRequest, TaskStatus, WardrobeItem
+from app.schemas.favorites import FavoriteProduct, FavoriteProductCreate, SavedLook
 from app.schemas.results import StyleTaskResult, StyleTaskView
 
 
 @dataclass
 class TaskService:
     repository: TaskRepository
-    wardrobe_repository: InMemoryWardrobeRepository
+    favorites_repository: FavoritesRepository
+    wardrobe_repository: WardrobeRepository
     graph: StyleAgentGraph
     tracer: InMemoryTraceRecorder
 
-    def create_task(self, request: StyleTaskRequest, owner_id: str | None = None) -> StyleTaskView:
+    def create_task(
+        self,
+        request: StyleTaskRequest,
+        user_id: str | None = None,
+        owner_id: str | None = None,
+    ) -> StyleTaskView:
         task_id = f"task_{uuid4().hex[:16]}"
-        return self.repository.create(task_id, request, owner_id=owner_id)
+        effective_user_id = user_id if user_id is not None else owner_id
+        return self.repository.create(task_id, request, user_id=effective_user_id, owner_id=owner_id)
 
     async def run_task(self, task_id: str) -> StyleTaskView:
         task = self.repository.get(task_id)
@@ -63,6 +78,9 @@ class TaskService:
     def get_task(self, task_id: str) -> StyleTaskView:
         return self.repository.get(task_id)
 
+    def task_owner_id(self, task_id: str) -> str | None:
+        return self.repository.owner_id(task_id)
+
     def get_result(self, task_id: str) -> StyleTaskResult:
         task = self.repository.get(task_id)
         if task.result is None:
@@ -78,14 +96,37 @@ class TaskService:
     def list_wardrobe_items(self, owner_id: str | None = None) -> list[WardrobeItem]:
         return self.wardrobe_repository.list_for_user(owner_id)
 
+    def save_favorite_product(self, user_id: str, product: FavoriteProductCreate) -> FavoriteProduct:
+        return self.favorites_repository.save_product(user_id, product)
+
+    def list_favorite_products(self, user_id: str) -> list[FavoriteProduct]:
+        return self.favorites_repository.list_products(user_id)
+
+    def delete_favorite_product(self, user_id: str, favorite_id: str) -> bool:
+        return self.favorites_repository.delete_product(user_id, favorite_id)
+
+    def save_look(self, user_id: str, task_id: str) -> SavedLook:
+        task = self.repository.get(task_id)
+        if self.repository.owner_id(task_id) != user_id:
+            raise PermissionError("Task not found")
+        if task.result is None or task.result.outfit is None or task.result.recommendation_report is None:
+            raise ValueError("Task has no completed look to save")
+        return self.favorites_repository.save_look(user_id, task)
+
+    def list_saved_looks(self, user_id: str) -> list[SavedLook]:
+        return self.favorites_repository.list_looks(user_id)
+
 
 def create_task_service(
     graph: StyleAgentGraph,
     tracer: InMemoryTraceRecorder,
-    wardrobe_repository: InMemoryWardrobeRepository | None = None,
+    wardrobe_repository: WardrobeRepository | None = None,
+    favorites_repository: FavoritesRepository | None = None,
+    repository: TaskRepository | None = None,
 ) -> TaskService:
     return TaskService(
-        repository=InMemoryTaskRepository(),
+        repository=repository or InMemoryTaskRepository(),
+        favorites_repository=favorites_repository or InMemoryFavoritesRepository(),
         wardrobe_repository=wardrobe_repository or InMemoryWardrobeRepository(),
         graph=graph,
         tracer=tracer,
