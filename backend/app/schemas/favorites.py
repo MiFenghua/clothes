@@ -22,8 +22,8 @@ class FavoriteProduct(ProductCandidate):
 class SavedLook(BaseModel):
     look_id: str
     user_id: str
-    source_task_id: str
-    outfit: OutfitCandidate | None
+    source_task_id: str | None = None
+    outfit: OutfitCandidate | None = None
     recommendation_report: RecommendationReport
     try_on_image_url: str | None = None
     image_quality_report: ImageQualityReport | None = None

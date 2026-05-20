@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.providers.persistence import InMemoryFavoritesRepository, InMemoryTaskRepository
 from app.schemas.domain import (
     Budget,
@@ -12,7 +14,7 @@ from app.schemas.domain import (
     StyleTaskRequest,
     TaskStatus,
 )
-from app.schemas.favorites import FavoriteProductCreate
+from app.schemas.favorites import FavoriteProductCreate, SavedLook
 from app.schemas.quality import GateStatus, QualityGateReport, RecommendationReport
 from app.schemas.results import StyleTaskResult
 
@@ -132,6 +134,18 @@ def test_saved_looks_are_idempotent_and_scoped_by_user():
     assert first.outfit == completed.result.outfit
     assert first.recommendation_report == recommendation_report()
     assert first.try_on_image_url == "/try-on/task-1.jpg"
+
+
+def test_saved_look_schema_defaults_source_task_and_outfit():
+    saved = SavedLook(
+        look_id="look-1",
+        user_id="user-1",
+        recommendation_report=recommendation_report(),
+        created_at=datetime.now(timezone.utc),
+    )
+
+    assert saved.source_task_id is None
+    assert saved.outfit is None
 
 
 def test_saved_look_snapshots_task_result_fields():
