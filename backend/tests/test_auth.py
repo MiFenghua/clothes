@@ -4,8 +4,12 @@ import json
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.providers.auth import AuthStore, GoogleProfile
+from app.providers.google_auth import GoogleIdTokenVerifier, GoogleTokenVerificationError
+from app.main import create_app
+from app.services.container import get_container
 
 
 def profile(**overrides: object) -> GoogleProfile:
@@ -18,6 +22,28 @@ def profile(**overrides: object) -> GoogleProfile:
     }
     data.update(overrides)
     return GoogleProfile(**data)
+
+
+class FakeGoogleVerifier(GoogleIdTokenVerifier):
+    def __init__(self) -> None:
+        self.profile = profile()
+        self.error: Exception | None = None
+
+    def verify(self, id_token: str) -> GoogleProfile:
+        if self.error is not None:
+            raise self.error
+        return self.profile
+
+
+def auth_client(tmp_path) -> tuple[TestClient, FakeGoogleVerifier]:
+    get_container.cache_clear()
+    container = get_container()
+    container.settings.auth_store_path = tmp_path / "route-auth.json"
+    container.auth_store = AuthStore(container.settings.auth_store_path, session_max_age_days=30)
+    verifier = FakeGoogleVerifier()
+    container.google_id_token_verifier = verifier
+    client = TestClient(create_app())
+    return client, verifier
 
 
 def test_google_login_creates_user_and_session(tmp_path):
@@ -118,3 +144,62 @@ def test_auth_store_saves_with_atomic_replace(tmp_path, monkeypatch):
     stored_user = reloaded.get_user_by_token(session.token)
     assert stored_user is not None
     assert stored_user.user_id == user.user_id
+
+
+def test_google_auth_route_returns_user_and_session_for_valid_profile(tmp_path):
+    client, verifier = auth_client(tmp_path)
+    verifier.profile = profile()
+
+    response = client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user"]["email"] == "style.user@example.com"
+    assert body["user"]["provider"] == "google"
+    assert body["session"]["token"]
+    assert body["session"]["expires_at"]
+
+
+def test_google_auth_route_rejects_unverified_email(tmp_path):
+    client, verifier = auth_client(tmp_path)
+    verifier.profile = profile(email_verified=False)
+
+    response = client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"})
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Google email is not verified"}
+
+
+def test_google_auth_route_rejects_invalid_google_token(tmp_path):
+    client, verifier = auth_client(tmp_path)
+    verifier.error = GoogleTokenVerificationError("Invalid Google ID token")
+
+    response = client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"})
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid Google ID token"}
+
+
+def test_auth_me_returns_current_user_from_bearer_token(tmp_path):
+    client, _ = auth_client(tmp_path)
+    login = client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"})
+    token = login.json()["session"]["token"]
+
+    response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "style.user@example.com"
+
+
+def test_logout_invalidates_bearer_session(tmp_path):
+    client, _ = auth_client(tmp_path)
+    login = client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"})
+    token = login.json()["session"]["token"]
+
+    response = client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
+    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert me.status_code == 200
+    assert me.json() == {"user": None}
