@@ -138,6 +138,8 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        pollingJob?.cancel()
+        pollingJob = null
         viewModelScope.launch {
             runCatching { api.logout() }
             authSessionStore.clear()
@@ -325,11 +327,18 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     private fun refreshCurrentUser() {
         if (authSessionStore.token() == null) return
         viewModelScope.launch {
-            val user = runCatching { api.currentUser() }.getOrNull()
-            if (user == null) {
-                authSessionStore.clear()
-            }
-            _uiState.update { it.copy(currentUser = user) }
+            runCatching { api.currentUser() }
+                .onSuccess { user ->
+                    if (user == null) {
+                        authSessionStore.clear()
+                    }
+                    _uiState.update { it.copy(currentUser = user) }
+                }
+                .onFailure {
+                    _uiState.update { state ->
+                        state.copy(currentUser = authSessionStore.user() ?: state.currentUser)
+                    }
+                }
         }
     }
 
