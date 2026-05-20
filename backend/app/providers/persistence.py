@@ -193,10 +193,12 @@ class InMemoryFavoritesRepository:
             look_id=f"look_{uuid4().hex[:16]}",
             user_id=user_id,
             source_task_id=task.task_id,
-            outfit=task.result.outfit,
-            recommendation_report=task.result.recommendation_report,
+            outfit=task.result.outfit.model_copy(deep=True) if task.result.outfit is not None else None,
+            recommendation_report=task.result.recommendation_report.model_copy(deep=True),
             try_on_image_url=task.result.try_on_image_url,
-            image_quality_report=task.result.image_quality_report,
+            image_quality_report=task.result.image_quality_report.model_copy(deep=True)
+            if task.result.image_quality_report is not None
+            else None,
             created_at=now_utc(),
         )
         self.saved_looks[look.look_id] = look

@@ -132,3 +132,31 @@ def test_saved_looks_are_idempotent_and_scoped_by_user():
     assert first.outfit == completed.result.outfit
     assert first.recommendation_report == recommendation_report()
     assert first.try_on_image_url == "/try-on/task-1.jpg"
+
+
+def test_saved_look_snapshots_task_result_fields():
+    task_repository = InMemoryTaskRepository()
+    favorites_repository = InMemoryFavoritesRepository()
+    task = task_repository.create("task-1", task_request(), user_id="user-1")
+    completed = task_repository.complete(
+        task.task_id,
+        StyleTaskResult(
+            task_id=task.task_id,
+            status=TaskStatus.succeeded,
+            outfit=outfit_candidate(),
+            try_on_image_url="/try-on/task-1.jpg",
+            recommendation_report=recommendation_report(),
+        ),
+    )
+
+    saved = favorites_repository.save_look("user-1", completed)
+    assert completed.result is not None
+    assert completed.result.recommendation_report is not None
+    assert completed.result.outfit is not None
+
+    completed.result.recommendation_report.why_this_works.append("later mutation")
+    completed.result.outfit.title = "Mutated Look"
+
+    assert saved.recommendation_report.why_this_works == ["complete outfit"]
+    assert saved.outfit is not None
+    assert saved.outfit.title == "Clean Daily Look"
