@@ -3,6 +3,7 @@ package com.clothes.app
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -22,7 +23,7 @@ class ProductParsingTest {
                 "hair_tone": "brown",
                 "style_keywords": ["minimal", "commute"],
                 "feature_metrics": [
-                  {"label": "fit", "value": 0.91}
+                  {"label": "height", "value": "168 cm"}
                 ]
               }
             }
@@ -36,8 +37,8 @@ class ProductParsingTest {
         assertEquals(168, view.styleProfile.heightCm)
         assertNull(view.styleProfile.weightKg)
         assertEquals(listOf("minimal", "commute"), view.styleProfile.styleKeywords)
-        assertEquals("fit", view.styleProfile.featureMetrics.first().label)
-        assertEquals(0.91, view.styleProfile.featureMetrics.first().value, 0.0001)
+        assertEquals("height", view.styleProfile.featureMetrics.first().label)
+        assertEquals("168 cm", view.styleProfile.featureMetrics.first().value)
     }
 
     @Test
@@ -57,7 +58,7 @@ class ProductParsingTest {
                   "scene": "commute",
                   "score": 0.93,
                   "image_url": "https://example.com/rec.png",
-                  "source_task_id": "task-1"
+                  "source_task_id": null
                 }
               ],
               "today_suggestion": {
@@ -66,7 +67,8 @@ class ProductParsingTest {
               },
               "backend_status": {
                 "online": true,
-                "queue": 2
+                "queue": 2,
+                "last_error": null
               }
             }
             """.trimIndent(),
@@ -78,9 +80,11 @@ class ProductParsingTest {
         assertEquals("rec-1", view.recommendations.single().recommendationId)
         assertEquals("Blue blazer", view.recommendations.first().title)
         assertEquals("https://example.com/rec.png", view.recommendations.single().imageUrl)
+        assertNull(view.recommendations.first().sourceTaskId)
         assertEquals("Layer lightly", view.todaySuggestion.title)
         assertEquals("true", view.backendStatus["online"])
         assertEquals("2", view.backendStatus["queue"])
+        assertFalse(view.backendStatus.containsKey("last_error"))
     }
 
     @Test
@@ -121,7 +125,7 @@ class ProductParsingTest {
                 """
                 {
                   "favorite_id": "fav-1",
-                  "owner_id": "user-1",
+                  "owner_id": null,
                   "favorite_type": "inspiration",
                   "target_id": "insp-1",
                   "snapshot": {
@@ -133,7 +137,7 @@ class ProductParsingTest {
         )
 
         assertEquals("fav-1", favorite.favoriteId)
-        assertEquals("user-1", favorite.ownerId)
+        assertNull(favorite.ownerId)
         assertEquals("inspiration", favorite.favoriteType)
         assertEquals("insp-1", favorite.targetId)
         assertEquals("Office neutral", favorite.snapshotTitle)

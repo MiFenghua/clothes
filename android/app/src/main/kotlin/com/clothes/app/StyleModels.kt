@@ -236,7 +236,7 @@ data class InspirationLook(
 
 data class FeatureMetric(
     val label: String,
-    val value: Double,
+    val value: String,
 )
 
 data class StyleProfile(
@@ -267,7 +267,7 @@ data class HomeRecommendation(
     val scene: String,
     val score: Double,
     val imageUrl: String?,
-    val sourceTaskId: String,
+    val sourceTaskId: String?,
 )
 
 data class TodaySuggestion(
@@ -289,7 +289,7 @@ data class InspirationPage(
 
 data class FavoriteView(
     val favoriteId: String,
-    val ownerId: String,
+    val ownerId: String?,
     val favoriteType: String,
     val targetId: String,
     val snapshotTitle: String?,

@@ -406,7 +406,7 @@ fun parseStyleProfile(json: JSONObject): StyleProfile {
 fun parseFeatureMetric(json: JSONObject): FeatureMetric {
     return FeatureMetric(
         label = json.optString("label"),
-        value = json.optDouble("value"),
+        value = json.optString("value"),
     )
 }
 
@@ -434,7 +434,7 @@ fun parseHomeRecommendation(json: JSONObject): HomeRecommendation {
         scene = json.optString("scene"),
         score = json.optDouble("score"),
         imageUrl = json.optNullableString("image_url"),
-        sourceTaskId = json.optString("source_task_id"),
+        sourceTaskId = json.optNullableString("source_task_id"),
     )
 }
 
@@ -468,7 +468,7 @@ fun parseInspirationLook(json: JSONObject): InspirationLook {
 fun parseFavorite(json: JSONObject): FavoriteView {
     return FavoriteView(
         favoriteId = json.optString("favorite_id"),
-        ownerId = json.optString("owner_id"),
+        ownerId = json.optNullableString("owner_id"),
         favoriteType = json.optString("favorite_type"),
         targetId = json.optString("target_id"),
         snapshotTitle = json.optJSONObject("snapshot")?.optNullableString("title"),
@@ -624,7 +624,9 @@ private fun JSONObject?.toDoubleMap(): Map<String, Double> {
 private fun JSONObject?.toStringMap(): Map<String, String> {
     if (this == null) return emptyMap()
     val result = linkedMapOf<String, String>()
-    keys().forEach { key -> result[key] = opt(key)?.toString() ?: "null" }
+    keys().forEach { key ->
+        if (!isNull(key)) result[key] = opt(key).toString()
+    }
     return result
 }
 
