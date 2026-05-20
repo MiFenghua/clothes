@@ -37,23 +37,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.clothes.app.AppRoute
 import com.clothes.app.FavoriteTab
+import com.clothes.app.FavoriteView
 import com.clothes.app.InspirationLook
 import com.clothes.app.StyleViewModel
 import com.clothes.app.UiState
 import com.clothes.app.WardrobeItem
 import com.clothes.app.asPercent
 import com.clothes.app.categoryLabel
+import com.clothes.app.toInspirationLook
 import com.clothes.app.ui.components.ClozCard
 import com.clothes.app.ui.components.ClozChip
 import com.clothes.app.ui.components.ClozGhostButton
 import com.clothes.app.ui.components.ClozLogo
 import com.clothes.app.ui.components.ClozPrimaryButton
 import com.clothes.app.ui.components.ClozProgressBar
+import com.clothes.app.ui.components.ClozRemoteImage
 import com.clothes.app.ui.components.EmptyWardrobeIllustration
 import com.clothes.app.ui.components.GarmentPlaceholder
 import com.clothes.app.ui.components.MetricColumn
@@ -69,6 +73,13 @@ import com.clothes.app.ui.theme.ClozDimens
 
 @Composable
 fun HomeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
+    val home = state.homeView
+    val featureScore = home?.featureSummary?.score ?: 0.92
+    val recommendations = home?.recommendations
+        ?.map { it.toInspirationLook() }
+        ?.takeIf { it.isNotEmpty() }
+        ?: DemoLooks.take(3)
+    val todaySuggestion = home?.todaySuggestion
     LazyColumn(
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -94,22 +105,22 @@ fun HomeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = M
                     Text("我的特征分析", color = ClozColors.Ink, fontWeight = FontWeight.Bold)
                     Text("查看 〉", modifier = Modifier.clickable { viewModel.openFeatureAnalysis() }, color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
                 }
-                MetricColumn("适配度", "92%", modifier = Modifier.fillMaxWidth())
-                ClozProgressBar(0.92f)
+                MetricColumn(home?.featureSummary?.title?.takeIf { it.isNotBlank() } ?: "适配度", featureScore.asPercent(), modifier = Modifier.fillMaxWidth())
+                ClozProgressBar(featureScore.toFloat())
             }
         }
         item { SectionTitle("今日推荐") }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                DemoLooks.take(3).forEach { look ->
+                recommendations.forEach { look ->
                     MiniLookCard(look, Modifier.width(128.dp)) { viewModel.openOutfitDetail() }
                 }
             }
         }
         item {
             ClozCard(background = ClozColors.LavenderSoft.copy(alpha = 0.56f)) {
-                Text("今日穿搭建议", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
-                Text("多云 18-24°C，适合薄外套，早晚注意保暖。", color = ClozColors.Muted, style = MaterialTheme.typography.bodySmall)
+                Text(todaySuggestion?.title?.takeIf { it.isNotBlank() } ?: "今日穿搭建议", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
+                Text(todaySuggestion?.body?.takeIf { it.isNotBlank() } ?: "多云 18-24°C，适合薄外套，早晚注意保暖。", color = ClozColors.Muted, style = MaterialTheme.typography.bodySmall)
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -118,6 +129,7 @@ fun HomeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = M
 
 @Composable
 fun InspirationScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
+    val looks = state.inspirationPage?.items?.takeIf { it.isNotEmpty() } ?: DemoLooks
     LazyColumn(
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -133,7 +145,7 @@ fun InspirationScreen(state: UiState, viewModel: StyleViewModel, modifier: Modif
                 listOf("推荐", "通勤", "约会", "旅行", "轻熟").forEachIndexed { index, label -> ClozChip(label, selected = index == 0) }
             }
         }
-        items(DemoLooks.chunked(2)) { row ->
+        items(looks.chunked(2)) { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { look -> InspirationTile(look, Modifier.weight(1f)) { viewModel.openOutfitDetail() } }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -183,6 +195,7 @@ fun WardrobeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier
 
 @Composable
 fun FavoritesScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
+    val backendFavorites = state.favoriteItems
     LazyColumn(
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -205,18 +218,29 @@ fun FavoritesScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifie
                 listOf("全部", "通勤", "约会", "旅行").forEachIndexed { index, label -> ClozChip(label, selected = index == 0) }
             }
         }
-        items(DemoFavorites.chunked(2)) { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { favorite ->
-                    ClozCard(Modifier.weight(1f)) {
-                        Box(Modifier.fillMaxWidth().aspectRatio(0.78f)) {
-                            OutfitPlaceholder(Modifier.fillMaxSize())
-                            Icon(if (favorite.liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, null, tint = ClozColors.Lavender, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
-                        }
-                        Text(favorite.date, color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
+        if (backendFavorites.isNotEmpty()) {
+            items(backendFavorites.chunked(2)) { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { favorite ->
+                        BackendFavoriteCard(favorite, viewModel, Modifier.weight(1f))
                     }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        } else {
+            items(DemoFavorites.chunked(2)) { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { favorite ->
+                        ClozCard(Modifier.weight(1f)) {
+                            Box(Modifier.fillMaxWidth().aspectRatio(0.78f)) {
+                                OutfitPlaceholder(Modifier.fillMaxSize())
+                                Icon(if (favorite.liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, null, tint = ClozColors.Lavender, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
+                            }
+                            Text(favorite.date, color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
         }
         item {
@@ -229,7 +253,31 @@ fun FavoritesScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifie
 }
 
 @Composable
+private fun BackendFavoriteCard(favorite: FavoriteView, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
+    ClozCard(modifier) {
+        Box(Modifier.fillMaxWidth().aspectRatio(0.78f)) {
+            OutfitPlaceholder(Modifier.fillMaxSize())
+            IconButton(
+                onClick = { viewModel.deleteFavorite(favorite) },
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+            ) {
+                Icon(Icons.Filled.Favorite, null, tint = ClozColors.Lavender)
+            }
+        }
+        Text(
+            favorite.snapshotTitle ?: favorite.targetId,
+            color = ClozColors.Muted,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
 fun ProfileScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
+    val displayName = state.profileView?.styleProfile?.displayName ?: state.currentUser?.name ?: "Style User"
+    val email = state.profileView?.user?.email ?: state.currentUser?.email ?: "Not signed in"
     LazyColumn(
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -240,7 +288,7 @@ fun ProfileScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier 
                     Text("晴", color = ClozColors.Lavender, fontWeight = FontWeight.Bold)
                 }
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text("小晴", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
+                    Text(displayName, color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
                     Text("编辑个人资料 〉", color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
                 }
                 IconButton(onClick = {}) { Icon(Icons.Filled.Settings, null) }
@@ -249,7 +297,7 @@ fun ProfileScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier 
         }
         item {
             Text(
-                state.currentUser?.email ?: "未登录",
+                email,
                 color = ClozColors.Muted,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -277,7 +325,13 @@ fun ProfileScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier 
 @Composable
 private fun MiniLookCard(look: InspirationLook, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).clickable(onClick = onClick).padding(8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        OutfitPlaceholder(Modifier.fillMaxWidth().aspectRatio(0.62f))
+        Box(Modifier.fillMaxWidth().aspectRatio(0.62f)) {
+            if (look.imageUrl.isNullOrBlank()) {
+                OutfitPlaceholder(Modifier.fillMaxSize())
+            } else {
+                ClozRemoteImage(look.imageUrl, Modifier.fillMaxSize(), ContentScale.Crop)
+            }
+        }
         Text(look.scene, color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
@@ -285,7 +339,13 @@ private fun MiniLookCard(look: InspirationLook, modifier: Modifier = Modifier, o
 @Composable
 private fun InspirationTile(look: InspirationLook, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).clickable(onClick = onClick).padding(8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        OutfitPlaceholder(Modifier.fillMaxWidth().aspectRatio(0.78f),)
+        Box(Modifier.fillMaxWidth().aspectRatio(0.78f)) {
+            if (look.imageUrl.isNullOrBlank()) {
+                OutfitPlaceholder(Modifier.fillMaxSize())
+            } else {
+                ClozRemoteImage(look.imageUrl, Modifier.fillMaxSize(), ContentScale.Crop)
+            }
+        }
         Text(look.title, color = ClozColors.Ink, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(Icons.Filled.Favorite, null, tint = ClozColors.Like, modifier = Modifier.size(13.dp))

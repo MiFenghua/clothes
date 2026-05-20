@@ -86,6 +86,10 @@ data class UiState(
     val wardrobeDraft: WardrobeDraft = WardrobeDraft(),
     val selectedWardrobeItem: WardrobeItem? = null,
     val currentUser: PublicUser? = null,
+    val profileView: ProfileView? = null,
+    val homeView: HomeView? = null,
+    val inspirationPage: InspirationPage? = null,
+    val favoriteItems: List<FavoriteView> = emptyList(),
     val backendOnline: Boolean? = null,
     val errorMessage: String? = null,
     val isSubmitting: Boolean = false,
@@ -93,6 +97,11 @@ data class UiState(
     val isSavingImage: Boolean = false,
     val isLoadingWardrobe: Boolean = false,
     val isSavingWardrobe: Boolean = false,
+    val isLoadingProfile: Boolean = false,
+    val isLoadingHome: Boolean = false,
+    val isLoadingInspirations: Boolean = false,
+    val isLoadingFavorites: Boolean = false,
+    val isSavingFavorite: Boolean = false,
     val loginPhone: String = "",
     val loginCode: String = "",
     val favoritesTab: FavoriteTab = FavoriteTab.Outfits,
@@ -128,6 +137,28 @@ enum class FavoriteTab(val label: String) {
     Outfits("穿搭"),
     Items("单品"),
     Inspiration("灵感"),
+}
+
+val FavoriteTab.apiType: String
+    get() = when (this) {
+        FavoriteTab.Outfits -> "outfit"
+        FavoriteTab.Items -> "item"
+        FavoriteTab.Inspiration -> "inspiration"
+    }
+
+fun StyleForm.toStyleProfile(displayName: String = "Style User", current: StyleProfile? = null): StyleProfile {
+    fun String.trimmedOrNull(): String? = trim().takeIf { it.isNotBlank() }
+
+    return StyleProfile(
+        displayName = displayName,
+        heightCm = heightCm.trimmedOrNull()?.toIntOrNull(),
+        weightKg = weightKg.trimmedOrNull()?.toIntOrNull(),
+        bodyShape = bodyShape.trimmedOrNull(),
+        skinTone = skinTone.trimmedOrNull(),
+        hairTone = hairTone.trimmedOrNull(),
+        styleKeywords = likedStyle.split(",").map { it.trim() }.filter { it.isNotBlank() },
+        featureMetrics = current?.featureMetrics.orEmpty(),
+    )
 }
 
 data class StyleTaskView(
@@ -269,6 +300,18 @@ data class HomeRecommendation(
     val imageUrl: String?,
     val sourceTaskId: String?,
 )
+
+fun HomeRecommendation.toInspirationLook(): InspirationLook {
+    return InspirationLook(
+        title = title,
+        scene = scene,
+        palette = "",
+        note = "",
+        score = score,
+        inspirationId = recommendationId,
+        imageUrl = imageUrl,
+    )
+}
 
 data class TodaySuggestion(
     val title: String,

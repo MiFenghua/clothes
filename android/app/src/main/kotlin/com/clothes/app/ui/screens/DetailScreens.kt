@@ -108,7 +108,7 @@ fun OutfitDetailScreen(state: UiState, viewModel: StyleViewModel, modifier: Modi
     ) {
         item {
             ClozTopBar("搭配详情", onBack = { viewModel.navigate(com.clothes.app.AppRoute.Home) }) {
-                IconButton(onClick = {}) { Icon(Icons.Filled.FavoriteBorder, null) }
+                IconButton(onClick = viewModel::saveCurrentOutfitFavorite) { Icon(Icons.Filled.FavoriteBorder, null) }
                 IconButton(onClick = {}) { Icon(Icons.Filled.IosShare, null) }
             }
         }

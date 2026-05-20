@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.clothes.app.BodyShapeOptions
+import com.clothes.app.FeatureMetric as CoreFeatureMetric
 import com.clothes.app.GoogleAuthClient
 import com.clothes.app.SceneOptions
 import com.clothes.app.SkinToneOptions
@@ -227,6 +228,9 @@ fun UploadAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Mo
 
 @Composable
 fun FeatureAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
+    val featureMetrics = state.profileView?.styleProfile?.featureMetrics?.takeIf { it.isNotEmpty() }
+        ?: DemoFeatureMetrics.map { CoreFeatureMetric(it.label, it.value) }
+    val styleKeywords = state.profileView?.styleProfile?.styleKeywords?.takeIf { it.isNotEmpty() } ?: DemoStyleKeywords
     LazyColumn(
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -237,7 +241,7 @@ fun FeatureAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: M
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     BodyOutlinePlaceholder(Modifier.weight(1f).height(260.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                        DemoFeatureMetrics.forEach { metric ->
+                        featureMetrics.forEach { metric ->
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(Modifier.size(26.dp).clip(CircleShape).background(ClozColors.LavenderSoft), contentAlignment = Alignment.Center) {
                                     Text(metric.label.take(1), color = ClozColors.Lavender, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
@@ -255,7 +259,7 @@ fun FeatureAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: M
         item {
             ClozCard {
                 Text("风格关键词", color = ClozColors.Ink, fontWeight = FontWeight.Bold)
-                ChipScroller(DemoStyleKeywords, DemoStyleKeywords.take(2)) {}
+                ChipScroller(styleKeywords, styleKeywords.take(2)) {}
             }
         }
         item { ClozPrimaryButton("查看推荐穿搭", onClick = { viewModel.navigate(com.clothes.app.AppRoute.Home) }) }

@@ -26,6 +26,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(currentUser = authSessionStore.user()) }
         refreshCurrentUser()
         refreshBackendStatus()
+        refreshProductSurfaces()
     }
 
     fun startExperience() {
@@ -36,6 +37,31 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(route = AppRoute.Home, previousRoute = AppRoute.Home, notice = null) }
         refreshBackendStatus()
         loadWardrobe()
+        viewModelScope.launch {
+            val state = _uiState.value
+            val profile = state.form.toStyleProfile(
+                displayName = state.currentUser?.name
+                    ?: state.profileView?.styleProfile?.displayName
+                    ?: "Style User",
+                current = state.profileView?.styleProfile,
+            )
+            try {
+                val saved = api.updateStyleProfile(profile)
+                _uiState.update { current ->
+                    current.copy(
+                        profileView = current.profileView?.copy(styleProfile = saved)
+                            ?: ProfileView(user = current.currentUser, styleProfile = saved),
+                        notice = null,
+                    )
+                }
+                refreshProductSurfaces()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update { it.copy(notice = error.message ?: "Style profile update failed") }
+                refreshProductSurfaces()
+            }
+        }
     }
 
     fun navigate(route: AppRoute) {
@@ -49,6 +75,10 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         if (route == AppRoute.Wardrobe) loadWardrobe()
+        if (route == AppRoute.Inspiration) loadInspirations()
+        if (route == AppRoute.Favorites) loadFavorites()
+        if (route == AppRoute.Profile) refreshProfile()
+        if (route == AppRoute.Home) refreshHome()
         if (route == AppRoute.Profile || route == AppRoute.Home) refreshBackendStatus()
     }
 
@@ -133,6 +163,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                                 notice = null,
                             )
                         }
+                        refreshProductSurfaces()
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Exception) {
@@ -183,10 +214,12 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openFavorites(tab: FavoriteTab = _uiState.value.favoritesTab) {
         _uiState.update { it.copy(route = AppRoute.Favorites, favoritesTab = tab, notice = null) }
+        loadFavorites(tab.apiType)
     }
 
     fun selectFavoritesTab(tab: FavoriteTab) {
         _uiState.update { it.copy(favoritesTab = tab, notice = null) }
+        loadFavorites(tab.apiType)
     }
 
     fun submit() {
@@ -254,6 +287,162 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                     isSavingImage = false,
                     notice = if (saved) "试穿图已保存到相册" else "当前图片暂时无法保存",
                 )
+            }
+        }
+    }
+
+    fun refreshProfile() {
+        if (_uiState.value.isLoadingProfile) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingProfile = true) }
+            try {
+                val profile = api.getProfile()
+                _uiState.update {
+                    it.copy(
+                        isLoadingProfile = false,
+                        profileView = profile,
+                        currentUser = profile.user ?: it.currentUser,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingProfile = false,
+                        notice = error.message,
+                    )
+                }
+            }
+        }
+    }
+
+    fun refreshHome() {
+        if (_uiState.value.isLoadingHome) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingHome = true) }
+            try {
+                val home = api.getHome()
+                _uiState.update {
+                    it.copy(
+                        isLoadingHome = false,
+                        homeView = home,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingHome = false,
+                        notice = error.message,
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadInspirations(scene: String? = null) {
+        if (_uiState.value.isLoadingInspirations) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingInspirations = true) }
+            try {
+                val page = api.getInspirations(scene)
+                _uiState.update {
+                    it.copy(
+                        isLoadingInspirations = false,
+                        inspirationPage = page,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingInspirations = false,
+                        notice = error.message,
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadFavorites(type: String = _uiState.value.favoritesTab.apiType) {
+        if (_uiState.value.isLoadingFavorites) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingFavorites = true) }
+            try {
+                val favorites = api.getFavorites(type)
+                _uiState.update {
+                    it.copy(
+                        isLoadingFavorites = false,
+                        favoriteItems = favorites,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingFavorites = false,
+                        notice = error.message ?: "Sign in to use favorites",
+                    )
+                }
+            }
+        }
+    }
+
+    fun saveCurrentOutfitFavorite() {
+        val outfit = _uiState.value.result?.outfit ?: run {
+            _uiState.update { it.copy(notice = "No outfit to save") }
+            return
+        }
+        if (_uiState.value.isSavingFavorite) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingFavorite = true, notice = null) }
+            try {
+                api.saveFavorite(
+                    type = "outfit",
+                    targetId = outfit.candidateId,
+                    snapshotTitle = outfit.title,
+                )
+                _uiState.update { it.copy(isSavingFavorite = false) }
+                loadFavorites(_uiState.value.favoritesTab.apiType)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSavingFavorite = false,
+                        notice = error.message ?: "Sign in to save favorites",
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteFavorite(favorite: FavoriteView) {
+        if (_uiState.value.isSavingFavorite) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingFavorite = true, notice = null) }
+            try {
+                api.deleteFavorite(favorite.favoriteId)
+                _uiState.update { state ->
+                    state.copy(
+                        isSavingFavorite = false,
+                        favoriteItems = state.favoriteItems.filterNot { it.favoriteId == favorite.favoriteId },
+                    )
+                }
+                loadFavorites(_uiState.value.favoritesTab.apiType)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSavingFavorite = false,
+                        notice = error.message ?: "Unable to update favorites",
+                    )
+                }
             }
         }
     }
@@ -338,6 +527,11 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             val online = api.health()
             _uiState.update { it.copy(backendOnline = online) }
         }
+    }
+
+    private fun refreshProductSurfaces() {
+        refreshProfile()
+        refreshHome()
     }
 
     private fun refreshCurrentUser() {
