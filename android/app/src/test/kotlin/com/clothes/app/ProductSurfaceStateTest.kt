@@ -26,7 +26,7 @@ class ProductSurfaceStateTest {
         )
         val form = StyleForm(
             heightCm = "168",
-            weightKg = " ",
+            weightKg = "52",
             likedStyle = "minimal, commute, ,soft",
             bodyShape = " pear ",
             skinTone = "",
@@ -37,12 +37,20 @@ class ProductSurfaceStateTest {
 
         assertEquals("Ada", profile.displayName)
         assertEquals(168, profile.heightCm)
-        assertNull(profile.weightKg)
+        assertEquals(52, profile.weightKg)
         assertEquals("pear", profile.bodyShape)
         assertNull(profile.skinTone)
         assertEquals("brown", profile.hairTone)
         assertEquals(listOf("minimal", "commute", "soft"), profile.styleKeywords)
         assertEquals(current.featureMetrics, profile.featureMetrics)
+    }
+
+    @Test
+    fun styleFormToStyleProfileUsesUiDefaultsForBlankMeasurements() {
+        val profile = StyleForm(heightCm = " ", weightKg = "").toStyleProfile(displayName = "Ada")
+
+        assertEquals(168, profile.heightCm)
+        assertEquals(50, profile.weightKg)
     }
 
     @Test

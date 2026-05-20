@@ -20,6 +20,10 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     private var pollingJob: Job? = null
     private var signInJob: Job? = null
     private var currentUserJob: Job? = null
+    private var profileJob: Job? = null
+    private var homeJob: Job? = null
+    private var inspirationsJob: Job? = null
+    private var favoriteJob: Job? = null
     private var authGeneration = 0
 
     init {
@@ -37,6 +41,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(route = AppRoute.Home, previousRoute = AppRoute.Home, notice = null) }
         refreshBackendStatus()
         loadWardrobe()
+        val generationAtStart = authGeneration
         viewModelScope.launch {
             val state = _uiState.value
             val profile = state.form.toStyleProfile(
@@ -47,6 +52,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             )
             try {
                 val saved = api.updateStyleProfile(profile)
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update { current ->
                     current.copy(
                         profileView = current.profileView?.copy(styleProfile = saved)
@@ -58,6 +64,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update { it.copy(notice = error.message ?: "Style profile update failed") }
                 refreshProductSurfaces()
             }
@@ -137,6 +144,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     fun signInWithGoogle(googleAuthClient: GoogleAuthClient) {
         signInJob?.cancel()
         authGeneration += 1
+        cancelProductSurfaceJobs()
         val generationAtStart = authGeneration
         signInJob = viewModelScope.launch {
             _uiState.update { it.copy(isSigningIn = true, notice = null) }
@@ -181,6 +189,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         authGeneration += 1
+        cancelProductSurfaceJobs()
         pollingJob?.cancel()
         pollingJob = null
         signInJob?.cancel()
@@ -293,10 +302,12 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshProfile() {
         if (_uiState.value.isLoadingProfile) return
-        viewModelScope.launch {
+        val generationAtStart = authGeneration
+        profileJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoadingProfile = true) }
             try {
                 val profile = api.getProfile()
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
                         isLoadingProfile = false,
@@ -307,6 +318,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
                         isLoadingProfile = false,
@@ -319,10 +331,12 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshHome() {
         if (_uiState.value.isLoadingHome) return
-        viewModelScope.launch {
+        val generationAtStart = authGeneration
+        homeJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoadingHome = true) }
             try {
                 val home = api.getHome()
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
                         isLoadingHome = false,
@@ -332,6 +346,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
                         isLoadingHome = false,
@@ -344,10 +359,12 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadInspirations(scene: String? = null) {
         if (_uiState.value.isLoadingInspirations) return
-        viewModelScope.launch {
+        val generationAtStart = authGeneration
+        inspirationsJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoadingInspirations = true) }
             try {
                 val page = api.getInspirations(scene)
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
                         isLoadingInspirations = false,
@@ -357,6 +374,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
                         isLoadingInspirations = false,
@@ -368,11 +386,15 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadFavorites(type: String = _uiState.value.favoritesTab.apiType) {
-        if (_uiState.value.isLoadingFavorites) return
-        viewModelScope.launch {
+        val requestedType = type
+        val generationAtStart = authGeneration
+        favoriteJob?.cancel()
+        favoriteJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoadingFavorites = true) }
             try {
-                val favorites = api.getFavorites(type)
+                val favorites = api.getFavorites(requestedType)
+                if (generationAtStart != authGeneration) return@launch
+                if (_uiState.value.favoritesTab.apiType != requestedType) return@launch
                 _uiState.update {
                     it.copy(
                         isLoadingFavorites = false,
@@ -382,6 +404,8 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (generationAtStart != authGeneration) return@launch
+                if (_uiState.value.favoritesTab.apiType != requestedType) return@launch
                 _uiState.update {
                     it.copy(
                         isLoadingFavorites = false,
@@ -398,6 +422,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         if (_uiState.value.isSavingFavorite) return
+        val generationAtStart = authGeneration
         viewModelScope.launch {
             _uiState.update { it.copy(isSavingFavorite = true, notice = null) }
             try {
@@ -406,11 +431,13 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                     targetId = outfit.candidateId,
                     snapshotTitle = outfit.title,
                 )
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update { it.copy(isSavingFavorite = false) }
                 loadFavorites(_uiState.value.favoritesTab.apiType)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
                         isSavingFavorite = false,
@@ -423,10 +450,12 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteFavorite(favorite: FavoriteView) {
         if (_uiState.value.isSavingFavorite) return
+        val generationAtStart = authGeneration
         viewModelScope.launch {
             _uiState.update { it.copy(isSavingFavorite = true, notice = null) }
             try {
                 api.deleteFavorite(favorite.favoriteId)
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update { state ->
                     state.copy(
                         isSavingFavorite = false,
@@ -437,6 +466,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
                         isSavingFavorite = false,
@@ -534,6 +564,26 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
         refreshHome()
     }
 
+    private fun cancelProductSurfaceJobs() {
+        profileJob?.cancel()
+        profileJob = null
+        homeJob?.cancel()
+        homeJob = null
+        inspirationsJob?.cancel()
+        inspirationsJob = null
+        favoriteJob?.cancel()
+        favoriteJob = null
+        _uiState.update {
+            it.copy(
+                isLoadingProfile = false,
+                isLoadingHome = false,
+                isLoadingInspirations = false,
+                isLoadingFavorites = false,
+                isSavingFavorite = false,
+            )
+        }
+    }
+
     private fun refreshCurrentUser() {
         val tokenAtStart = authSessionStore.token() ?: return
         currentUserJob?.cancel()
@@ -615,6 +665,10 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
         pollingJob?.cancel()
         signInJob?.cancel()
         currentUserJob?.cancel()
+        profileJob?.cancel()
+        homeJob?.cancel()
+        inspirationsJob?.cancel()
+        favoriteJob?.cancel()
         super.onCleared()
     }
 }

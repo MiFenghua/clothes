@@ -151,8 +151,8 @@ fun StyleForm.toStyleProfile(displayName: String = "Style User", current: StyleP
 
     return StyleProfile(
         displayName = displayName,
-        heightCm = heightCm.trimmedOrNull()?.toIntOrNull(),
-        weightKg = weightKg.trimmedOrNull()?.toIntOrNull(),
+        heightCm = heightCm.trimmedOrNull()?.toIntOrNull() ?: current?.heightCm ?: 168,
+        weightKg = weightKg.trimmedOrNull()?.toIntOrNull() ?: current?.weightKg ?: 50,
         bodyShape = bodyShape.trimmedOrNull(),
         skinTone = skinTone.trimmedOrNull(),
         hairTone = hairTone.trimmedOrNull(),
