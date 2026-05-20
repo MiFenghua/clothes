@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos as ArrowForwardIosAuto
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -50,6 +49,7 @@ import com.clothes.app.UiState
 import com.clothes.app.WardrobeItem
 import com.clothes.app.asPercent
 import com.clothes.app.categoryLabel
+import com.clothes.app.hasResolvedFavoritesForCurrentTab
 import com.clothes.app.toInspirationLook
 import com.clothes.app.visibleBackendFavorites
 import com.clothes.app.ui.components.ClozCard
@@ -66,7 +66,6 @@ import com.clothes.app.ui.components.ModelFigurePlaceholder
 import com.clothes.app.ui.components.OutfitPlaceholder
 import com.clothes.app.ui.components.SectionTitle
 import com.clothes.app.ui.components.StatusPill
-import com.clothes.app.ui.mock.DemoFavorites
 import com.clothes.app.ui.mock.DemoLooks
 import com.clothes.app.ui.mock.DemoWardrobeItem
 import com.clothes.app.ui.theme.ClozColors
@@ -197,6 +196,7 @@ fun WardrobeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier
 @Composable
 fun FavoritesScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
     val backendFavorites = state.visibleBackendFavorites
+    val favoritesResolved = state.hasResolvedFavoritesForCurrentTab
     LazyColumn(
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -219,30 +219,22 @@ fun FavoritesScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifie
                 listOf("全部", "通勤", "约会", "旅行").forEachIndexed { index, label -> ClozChip(label, selected = index == 0) }
             }
         }
-        if (backendFavorites.isNotEmpty()) {
-            items(backendFavorites.chunked(2)) { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { favorite ->
-                        BackendFavoriteCard(favorite, viewModel, Modifier.weight(1f))
-                    }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
-                }
-            }
-        } else {
-            items(DemoFavorites.chunked(2)) { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { favorite ->
-                        ClozCard(Modifier.weight(1f)) {
-                            Box(Modifier.fillMaxWidth().aspectRatio(0.78f)) {
-                                OutfitPlaceholder(Modifier.fillMaxSize())
-                                Icon(if (favorite.liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, null, tint = ClozColors.Lavender, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
-                            }
-                            Text(favorite.date, color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
+        when {
+            backendFavorites.isNotEmpty() -> {
+                items(backendFavorites.chunked(2)) { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        row.forEach { favorite ->
+                            BackendFavoriteCard(favorite, viewModel, Modifier.weight(1f))
                         }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
+            state.isLoadingFavorites -> item { FavoriteStateCard("正在同步收藏") }
+            favoritesResolved -> item {
+                FavoriteStateCard(if (state.currentUser == null) "登录后同步收藏" else "暂无收藏")
+            }
+            else -> item { FavoriteStateCard("正在同步收藏") }
         }
         item {
             ClozCard(background = ClozColors.LavenderSoft.copy(alpha = 0.54f)) {
@@ -272,6 +264,15 @@ private fun BackendFavoriteCard(favorite: FavoriteView, viewModel: StyleViewMode
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+private fun FavoriteStateCard(message: String) {
+    ClozCard {
+        Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
+            Text(message, color = ClozColors.Muted, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 

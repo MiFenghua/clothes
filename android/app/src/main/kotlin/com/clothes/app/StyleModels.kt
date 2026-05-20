@@ -166,6 +166,9 @@ fun StyleForm.toStyleProfile(displayName: String = "Style User", current: StyleP
 val UiState.visibleBackendFavorites: List<FavoriteView>
     get() = favoriteItems.takeIf { favoriteItemsType == favoritesTab.apiType }.orEmpty()
 
+val UiState.hasResolvedFavoritesForCurrentTab: Boolean
+    get() = favoriteItemsType == favoritesTab.apiType
+
 fun UiState.shouldRefreshProfileFromBackend(hasAuthToken: Boolean): Boolean {
     return hasAuthToken || !hasLocalStyleProfilePreview
 }

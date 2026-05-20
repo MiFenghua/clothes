@@ -433,6 +433,8 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update {
                     it.copy(
                         isLoadingFavorites = false,
+                        favoriteItems = emptyList(),
+                        favoriteItemsType = requestedType,
                         notice = error.message ?: "Sign in to use favorites",
                     )
                 }

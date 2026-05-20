@@ -90,6 +90,24 @@ class ProductSurfaceStateTest {
     }
 
     @Test
+    fun favoritesSurfaceResolvedTracksCurrentTabEvenWhenEmpty() {
+        assertTrue(
+            UiState(
+                favoritesTab = FavoriteTab.Inspiration,
+                favoriteItemsType = "inspiration",
+                favoriteItems = emptyList(),
+            ).hasResolvedFavoritesForCurrentTab,
+        )
+        assertTrue(
+            !UiState(
+                favoritesTab = FavoriteTab.Inspiration,
+                favoriteItemsType = "outfit",
+                favoriteItems = listOf(favoriteView(type = "outfit")),
+            ).hasResolvedFavoritesForCurrentTab,
+        )
+    }
+
+    @Test
     fun localProfilePreviewSkipsAnonymousProfileRefresh() {
         assertTrue(UiState().shouldRefreshProfileFromBackend(hasAuthToken = false))
         assertTrue(UiState(hasLocalStyleProfilePreview = true).shouldRefreshProfileFromBackend(hasAuthToken = true))
