@@ -93,7 +93,12 @@ import com.clothes.app.ui.theme.ClozDimens
 import com.clothes.app.ui.theme.ClozPrimaryGradient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.InputStream
 import java.net.URL
+import kotlin.math.ceil
+import kotlin.math.max
+
+private const val MaxPreviewImageDimension = 2048
 
 @Composable
 fun ClozLogo(modifier: Modifier = Modifier) {
@@ -360,16 +365,44 @@ fun tabIcon(route: AppRoute): ImageVector = when (route) {
 fun loadImageBitmap(context: Context, source: String): ImageBitmap? {
     return runCatching {
         if (source.startsWith("data:image/svg", ignoreCase = true)) return null
-        val bytes = when {
-            source.startsWith("content://", ignoreCase = true) -> context.contentResolver.openInputStream(Uri.parse(source))?.use { it.readBytes() }
+        val bitmap = when {
+            source.startsWith("content://", ignoreCase = true) -> {
+                val uri = Uri.parse(source)
+                decodeSampledBitmap { context.contentResolver.openInputStream(uri) }
+            }
             source.startsWith("data:", ignoreCase = true) -> {
                 val encoded = source.substringAfter("base64,", "")
-                if (encoded.isBlank()) null else android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+                val bytes = if (encoded.isBlank()) null else android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+                bytes?.let(::decodeSampledByteArray)
             }
-            else -> URL(source).openStream().use { it.readBytes() }
+            else -> decodeSampledBitmap { URL(source).openStream() }
         } ?: return null
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        bitmap.asImageBitmap()
     }.getOrNull()
+}
+
+fun calculateBitmapSampleSize(width: Int, height: Int, maxDimension: Int = MaxPreviewImageDimension): Int {
+    if (width <= 0 || height <= 0 || maxDimension <= 0) return 1
+    val largestDimension = max(width, height)
+    return max(1, ceil(largestDimension.toDouble() / maxDimension.toDouble()).toInt())
+}
+
+private fun decodeSampledBitmap(openStream: () -> InputStream?): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    openStream()?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = calculateBitmapSampleSize(bounds.outWidth, bounds.outHeight)
+    }
+    return openStream()?.use { BitmapFactory.decodeStream(it, null, options) }
+}
+
+private fun decodeSampledByteArray(bytes: ByteArray): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = calculateBitmapSampleSize(bounds.outWidth, bounds.outHeight)
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
 }
 
 fun copyToClipboard(context: Context, text: String) {
