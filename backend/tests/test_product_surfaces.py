@@ -63,23 +63,57 @@ def test_profile_returns_anonymous_default(tmp_path):
     assert "clean" in body["style_profile"]["style_keywords"]
 
 
-def test_update_style_profile_route_recomputes_metrics(tmp_path):
+def test_anonymous_style_profile_update_is_not_persisted(tmp_path):
     client = product_client(tmp_path)
 
     response = client.put(
         "/api/v1/profile/style",
-        json={"height_cm": 175, "body_shape": "straight", "skin_tone": "cool", "hair_tone": "black"},
+        json={"height_cm": 177, "body_shape": "hourglass", "skin_tone": "cool", "hair_tone": "black"},
     )
 
     assert response.status_code == 200
     body = response.json()
     metrics = {metric["label"]: metric["value"] for metric in body["feature_metrics"]}
-    assert body["height_cm"] == 175
+    assert body["height_cm"] == 177
+    assert body["body_shape"] == "hourglass"
     assert body["feature_metrics"][0]["label"] == "Height"
-    assert metrics["Height"] == "175 cm"
-    assert metrics["Body shape"] == "straight"
+    assert metrics["Height"] == "177 cm"
+    assert metrics["Body shape"] == "hourglass"
     assert metrics["Skin tone"] == "cool"
     assert metrics["Hair tone"] == "black"
+
+    get_response = client.get("/api/v1/profile")
+
+    assert get_response.status_code == 200
+    profile = get_response.json()["style_profile"]
+    get_metrics = {metric["label"]: metric["value"] for metric in profile["feature_metrics"]}
+    assert profile["height_cm"] == 168
+    assert profile["body_shape"] == "balanced"
+    assert get_metrics["Height"] == "168 cm"
+    assert get_metrics["Body shape"] == "balanced"
+
+
+def test_authenticated_style_profile_update_persists(tmp_path):
+    client, _ = authenticated_product_client(tmp_path)
+    login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert login_response.status_code == 200
+    token = login_response.json()["session"]["token"]
+
+    update_response = client.put(
+        "/api/v1/profile/style",
+        json={"height_cm": 175, "body_shape": "straight", "skin_tone": "cool", "hair_tone": "black"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    get_response = client.get("/api/v1/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert update_response.status_code == 200
+    assert get_response.status_code == 200
+    profile = get_response.json()["style_profile"]
+    metrics = {metric["label"]: metric["value"] for metric in profile["feature_metrics"]}
+    assert profile["height_cm"] == 175
+    assert profile["body_shape"] == "straight"
+    assert metrics["Height"] == "175 cm"
+    assert metrics["Body shape"] == "straight"
 
 
 def test_home_returns_seeded_recommendations_without_tasks(tmp_path):

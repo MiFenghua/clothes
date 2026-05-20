@@ -94,13 +94,25 @@ class ProfileRepository:
 
     def update(self, owner_id: str | None, update: StyleProfileUpdate, display_name: str) -> StyleProfileView:
         current = self.get(owner_id, display_name)
+        updated = self._apply_update(current, update, display_name)
+        self.profiles[owner_id] = updated
+        return updated
+
+    def preview_update(self, owner_id: str | None, update: StyleProfileUpdate, display_name: str) -> StyleProfileView:
+        current = self.get(owner_id, display_name)
+        return self._apply_update(current, update, display_name)
+
+    def _apply_update(
+        self,
+        current: StyleProfileView,
+        update: StyleProfileUpdate,
+        display_name: str,
+    ) -> StyleProfileView:
         values = update.model_dump(exclude_unset=True)
         if "display_name" in values and values["display_name"] is None:
             values["display_name"] = display_name
         updated = current.model_copy(update=values)
-        updated = updated.model_copy(update={"feature_metrics": profile_feature_metrics(updated)})
-        self.profiles[owner_id] = updated
-        return updated
+        return updated.model_copy(update={"feature_metrics": profile_feature_metrics(updated)})
 
 
 @dataclass

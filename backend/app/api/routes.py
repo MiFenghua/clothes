@@ -100,6 +100,8 @@ async def update_style_profile(
     container: Annotated[AppContainer, Depends(container_dependency)],
     user: Annotated[PublicUser | None, Depends(current_user)],
 ) -> StyleProfileView:
+    if user is None:
+        return container.profile_repository.preview_update(None, payload, "Style User")
     return container.profile_repository.update(_owner_id(user), payload, _display_name(user))
 
 
