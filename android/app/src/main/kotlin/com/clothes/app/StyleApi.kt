@@ -18,7 +18,43 @@ import java.util.Locale
 class StyleApi(
     private val context: Context,
     private val baseUrl: String,
+    private val authSessionStore: AuthSessionStore? = null,
 ) {
+    suspend fun loginWithGoogle(idToken: String): AuthResponse = withContext(Dispatchers.IO) {
+        val connection = openConnection("/api/v1/auth/google", "POST").apply {
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+        }
+        try {
+            val body = JSONObject().put("id_token", idToken).toString().toByteArray(Charsets.UTF_8)
+            connection.outputStream.use { it.write(body) }
+            parseAuthResponse(JSONObject(readResponse(connection)))
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun currentUser(): PublicUser? = withContext(Dispatchers.IO) {
+        val connection = openConnection("/api/v1/auth/me", "GET")
+        try {
+            JSONObject(readResponse(connection)).optJSONObject("user")?.let(::parsePublicUser)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun logout() = withContext(Dispatchers.IO) {
+        val connection = openConnection("/api/v1/auth/logout", "POST").apply {
+            doOutput = true
+            setRequestProperty("Content-Length", "0")
+        }
+        try {
+            readResponse(connection)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     suspend fun health(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val connection = openConnection("/health", "GET")
@@ -150,6 +186,9 @@ class StyleApi(
             connectTimeout = 20000
             readTimeout = 120000
             setRequestProperty("Accept", "application/json")
+            authSessionStore?.token()?.let { token ->
+                setRequestProperty("Authorization", "Bearer $token")
+            }
         }
     }
 
@@ -246,6 +285,30 @@ class StyleApi(
             .replace("http://127.0.0.1:8000", hostBase)
             .replace("http://localhost:8000", hostBase)
     }
+}
+
+fun parseAuthResponse(json: JSONObject): AuthResponse {
+    return AuthResponse(
+        user = parsePublicUser(json.getJSONObject("user")),
+        session = parseAuthSession(json.getJSONObject("session")),
+    )
+}
+
+fun parseAuthSession(json: JSONObject): AuthSession {
+    return AuthSession(
+        token = json.optString("token"),
+        expiresAt = json.optString("expires_at"),
+    )
+}
+
+fun parsePublicUser(json: JSONObject): PublicUser {
+    return PublicUser(
+        userId = json.optString("user_id"),
+        email = json.optString("email"),
+        name = json.optString("name"),
+        avatarUrl = json.optNullableString("avatar_url"),
+        provider = json.optString("provider"),
+    )
 }
 
 fun parseTaskView(text: String): StyleTaskView {
