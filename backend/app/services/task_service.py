@@ -69,6 +69,9 @@ class TaskService:
             raise ValueError("Task result is not ready")
         return task.result
 
+    def recent_completed_tasks(self, limit: int = 6) -> list[StyleTaskView]:
+        return self.repository.list_recent_completed(limit)
+
     def save_wardrobe_item(self, item: WardrobeItem) -> WardrobeItem:
         return self.wardrobe_repository.save(item)
 

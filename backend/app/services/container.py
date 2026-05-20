@@ -8,6 +8,7 @@ from app.providers.auth import AuthStore
 from app.providers.google_auth import GoogleOAuthIdTokenVerifier
 from app.providers.image import ArkSeedreamImageProvider, LocalTryOnImageProvider
 from app.providers.persistence import InMemoryWardrobeRepository
+from app.providers.product_content import FavoriteRepository, InspirationRepository, ProfileRepository
 from app.providers.search import BrowserProductSearchProvider, LocalDemoSearchProvider
 from app.providers.storage import LocalObjectStorage
 from app.providers.tracing import InMemoryTraceRecorder
@@ -30,6 +31,9 @@ class AppContainer:
         self.image_provider = self._create_image_provider()
         self.image_quality_provider = self._create_image_quality_provider()
         self.wardrobe_repository = InMemoryWardrobeRepository()
+        self.profile_repository = ProfileRepository()
+        self.favorite_repository = FavoriteRepository()
+        self.inspiration_repository = InspirationRepository()
         self.graph = StyleAgentGraph(
             settings=self.settings,
             tracer=self.tracer,

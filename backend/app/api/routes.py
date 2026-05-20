@@ -6,8 +6,10 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile
 
 from app.providers.google_auth import GoogleAuthNotConfiguredError, GoogleTokenVerificationError
+from app.providers.product_content import build_home_view
 from app.schemas.auth import AuthResponse, GoogleLoginRequest, PublicUser
 from app.schemas.domain import Budget, Marketplace, ProductCategory, Scene, StylePreferences, StyleTaskRequest, WardrobeItem
+from app.schemas.product import FavoriteType, HomeView, InspirationPage, ProfileView, StyleProfileUpdate, StyleProfileView
 from app.schemas.results import StyleTaskResult, StyleTaskView
 from app.services.container import AppContainer, get_container
 
@@ -81,6 +83,54 @@ async def logout(
 ) -> dict[str, bool]:
     container.auth_store.destroy_session(bearer_token(authorization))
     return {"ok": True}
+
+
+@router.get("/api/v1/profile", response_model=ProfileView)
+async def get_profile(
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> ProfileView:
+    profile = container.profile_repository.get(_owner_id(user), _display_name(user))
+    return ProfileView(user=user, style_profile=profile)
+
+
+@router.put("/api/v1/profile/style", response_model=StyleProfileView)
+async def update_style_profile(
+    payload: StyleProfileUpdate,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> StyleProfileView:
+    return container.profile_repository.update(_owner_id(user), payload, _display_name(user))
+
+
+@router.get("/api/v1/home", response_model=HomeView)
+async def get_home(
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> HomeView:
+    owner_id = _owner_id(user)
+    profile = container.profile_repository.get(owner_id, _display_name(user))
+    return build_home_view(
+        profile=profile,
+        tasks=container.task_service.recent_completed_tasks(),
+        settings_status={
+            "ok": True,
+            "search_provider": container.settings.search_provider,
+            "image_provider": container.settings.image_provider,
+            "model_provider": container.settings.model_provider,
+        },
+    )
+
+
+@router.get("/api/v1/inspirations", response_model=InspirationPage)
+async def list_inspirations(
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+    scene: Scene | None = None,
+) -> InspirationPage:
+    favorites = container.favorite_repository.list_for_owner(_owner_id(user), FavoriteType.inspiration)
+    favorite_ids_by_target = {favorite.target_id: favorite.favorite_id for favorite in favorites}
+    return container.inspiration_repository.list(scene=scene, favorite_ids_by_target=favorite_ids_by_target)
 
 
 @router.post("/api/v1/style-tasks", response_model=StyleTaskView, status_code=201)
@@ -219,6 +269,14 @@ def _visible_wardrobe_items(container: AppContainer, user: PublicUser | None) ->
     if user is not None:
         return container.task_service.list_wardrobe_items(user.user_id)
     return [item for item in container.task_service.list_wardrobe_items() if item.owner_id is None]
+
+
+def _owner_id(user: PublicUser | None) -> str | None:
+    return user.user_id if user else None
+
+
+def _display_name(user: PublicUser | None) -> str:
+    return user.name if user else "Style User"
 
 
 def _visible_wardrobe_item_ids(container: AppContainer, user: PublicUser | None, item_ids: list[str]) -> list[str]:

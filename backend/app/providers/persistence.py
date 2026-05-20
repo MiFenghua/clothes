@@ -28,6 +28,9 @@ class TaskRepository(Protocol):
     def get(self, task_id: str) -> StyleTaskView:
         ...
 
+    def list_recent_completed(self, limit: int = 6) -> list[StyleTaskView]:
+        ...
+
 
 @dataclass
 class InMemoryTaskRepository:
@@ -80,6 +83,15 @@ class InMemoryTaskRepository:
         if task_id not in self.tasks:
             raise KeyError(f"Task not found: {task_id}")
         return self.tasks[task_id]
+
+    def list_recent_completed(self, limit: int = 6) -> list[StyleTaskView]:
+        completed = [
+            task
+            for task in self.tasks.values()
+            if task.result is not None and task.status in {TaskStatus.succeeded, TaskStatus.partial_succeeded}
+        ]
+        completed.sort(key=lambda task: task.updated_at, reverse=True)
+        return completed[:limit]
 
 
 @dataclass
