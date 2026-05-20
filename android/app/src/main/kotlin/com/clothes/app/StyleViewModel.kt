@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -358,6 +359,8 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                         return@launch
                     }
                     delay(1200)
+                } catch (error: CancellationException) {
+                    throw error
                 } catch (error: Exception) {
                     _uiState.update {
                         it.copy(
