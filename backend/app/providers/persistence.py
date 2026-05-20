@@ -14,6 +14,12 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def canonical_task_owner_id(user_id: str | None = None, owner_id: str | None = None) -> str | None:
+    if user_id is not None and owner_id is not None and user_id != owner_id:
+        raise ValueError("Task owner mismatch")
+    return user_id if user_id is not None else owner_id
+
+
 class TaskRepository(Protocol):
     def create(
         self,
@@ -83,10 +89,10 @@ class InMemoryTaskRepository:
         user_id: str | None = None,
         owner_id: str | None = None,
     ) -> StyleTaskView:
-        stored_owner_id = user_id if user_id is not None else owner_id
+        canonical_owner_id = canonical_task_owner_id(user_id=user_id, owner_id=owner_id)
         task = StyleTaskView(
             task_id=task_id,
-            owner_id=owner_id,
+            owner_id=canonical_owner_id,
             status=TaskStatus.created,
             progress=2,
             message="任务已创建",
@@ -95,7 +101,7 @@ class InMemoryTaskRepository:
             updated_at=now_utc(),
         )
         self.tasks[task_id] = task
-        self.task_owner_ids[task_id] = stored_owner_id
+        self.task_owner_ids[task_id] = canonical_owner_id
         return task
 
     def update_status(self, task_id: str, status: TaskStatus, message: str, progress: int) -> StyleTaskView:

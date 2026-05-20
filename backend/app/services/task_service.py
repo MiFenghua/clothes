@@ -11,6 +11,7 @@ from app.providers.persistence import (
     InMemoryWardrobeRepository,
     TaskRepository,
     WardrobeRepository,
+    canonical_task_owner_id,
 )
 from app.providers.tracing import InMemoryTraceRecorder
 from app.schemas.domain import StyleTaskRequest, TaskStatus, WardrobeItem
@@ -33,8 +34,8 @@ class TaskService:
         owner_id: str | None = None,
     ) -> StyleTaskView:
         task_id = f"task_{uuid4().hex[:16]}"
-        effective_user_id = user_id if user_id is not None else owner_id
-        return self.repository.create(task_id, request, user_id=effective_user_id, owner_id=owner_id)
+        canonical_owner_id = canonical_task_owner_id(user_id=user_id, owner_id=owner_id)
+        return self.repository.create(task_id, request, user_id=canonical_owner_id, owner_id=canonical_owner_id)
 
     async def run_task(self, task_id: str) -> StyleTaskView:
         task = self.repository.get(task_id)
@@ -97,6 +98,13 @@ class TaskService:
         return self.wardrobe_repository.list_for_user(owner_id)
 
     def save_favorite_product(self, user_id: str, product: FavoriteProductCreate) -> FavoriteProduct:
+        if product.source_task_id is not None:
+            try:
+                owner_id = self.repository.owner_id(product.source_task_id)
+            except KeyError as exc:
+                raise PermissionError("Task not found") from exc
+            if owner_id != user_id:
+                raise PermissionError("Task not found")
         return self.favorites_repository.save_product(user_id, product)
 
     def list_favorite_products(self, user_id: str) -> list[FavoriteProduct]:

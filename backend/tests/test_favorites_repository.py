@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.providers.persistence import InMemoryFavoritesRepository, InMemoryTaskRepository
+import pytest
+
+from app.providers.persistence import InMemoryFavoritesRepository, InMemoryTaskRepository, InMemoryWardrobeRepository
 from app.schemas.domain import (
     Budget,
     Marketplace,
@@ -17,6 +19,7 @@ from app.schemas.domain import (
 from app.schemas.favorites import FavoriteProductCreate, SavedLook
 from app.schemas.quality import GateStatus, QualityGateReport, RecommendationReport
 from app.schemas.results import StyleTaskResult
+from app.services.task_service import TaskService
 
 
 def recommendation_report() -> RecommendationReport:
@@ -97,14 +100,52 @@ def test_favorite_products_are_idempotent_and_scoped_by_user():
     assert repository.list_products("user-1") == []
 
 
-def test_task_repository_stores_user_id_without_exposing_it_on_task_view():
+def task_service(
+    repository: InMemoryTaskRepository,
+    favorites_repository: InMemoryFavoritesRepository,
+) -> TaskService:
+    return TaskService(
+        repository=repository,
+        favorites_repository=favorites_repository,
+        wardrobe_repository=InMemoryWardrobeRepository(),
+        graph=None,
+        tracer=None,
+    )
+
+
+def test_task_repository_canonicalizes_owner_without_exposing_user_id():
     repository = InMemoryTaskRepository()
 
-    task = repository.create("task-1", task_request(), user_id="user-1")
+    task_a = repository.create("task-a", task_request(), user_id="user-a")
+    task_b = repository.create("task-b", task_request(), owner_id="owner-b")
 
-    assert repository.owner_id("task-1") == "user-1"
-    assert task.owner_id is None
-    assert not hasattr(task, "user_id")
+    assert repository.owner_id("task-a") == "user-a"
+    assert task_a.owner_id == "user-a"
+    assert not hasattr(task_a, "user_id")
+    assert repository.owner_id("task-b") == "owner-b"
+    assert task_b.owner_id == "owner-b"
+    with pytest.raises(ValueError, match="Task owner mismatch"):
+        repository.create("task-bad", task_request(), user_id="user-a", owner_id="owner-b")
+
+
+def test_task_service_rejects_divergent_task_owner_arguments():
+    service = task_service(InMemoryTaskRepository(), InMemoryFavoritesRepository())
+
+    with pytest.raises(ValueError, match="Task owner mismatch"):
+        service.create_task(task_request(), user_id="user-a", owner_id="owner-b")
+
+
+def test_save_favorite_product_requires_source_task_owner():
+    repository = InMemoryTaskRepository()
+    favorites_repository = InMemoryFavoritesRepository()
+    service = task_service(repository, favorites_repository)
+    task = repository.create("task-a", task_request(), user_id="user-a")
+    create = FavoriteProductCreate(**product_candidate().model_dump(), source_task_id=task.task_id)
+
+    with pytest.raises(PermissionError, match="Task not found"):
+        service.save_favorite_product("user-b", create)
+
+    assert favorites_repository.list_products("user-b") == []
 
 
 def test_saved_looks_are_idempotent_and_scoped_by_user():
