@@ -1,5 +1,46 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
+CREATE TABLE IF NOT EXISTS auth_users (
+  user_id TEXT PRIMARY KEY,
+  google_sub TEXT UNIQUE NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  avatar_url TEXT,
+  provider TEXT NOT NULL DEFAULT 'google',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_users_email
+  ON auth_users (email);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  session_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'auth_sessions_user_id_fkey'
+  ) THEN
+    ALTER TABLE auth_sessions
+      ADD CONSTRAINT auth_sessions_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_token_hash
+  ON auth_sessions (token_hash);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_expires
+  ON auth_sessions (user_id, expires_at);
+
 CREATE TABLE IF NOT EXISTS style_tasks (
   task_id TEXT PRIMARY KEY,
   user_id TEXT,
@@ -12,6 +53,19 @@ CREATE TABLE IF NOT EXISTS style_tasks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'style_tasks_user_id_fkey'
+  ) THEN
+    ALTER TABLE style_tasks
+      ADD CONSTRAINT style_tasks_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_style_tasks_user_created
   ON style_tasks (user_id, created_at DESC);
@@ -91,6 +145,53 @@ CREATE TABLE IF NOT EXISTS saved_looks (
 CREATE INDEX IF NOT EXISTS idx_saved_looks_user_created
   ON saved_looks (user_id, created_at DESC);
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'saved_looks_user_id_fkey'
+  ) THEN
+    ALTER TABLE saved_looks
+      ADD CONSTRAINT saved_looks_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_looks_unique_user_task
+  ON saved_looks (user_id, source_task_id)
+  WHERE source_task_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS favorite_products (
+  favorite_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL,
+  marketplace TEXT NOT NULL,
+  category TEXT NOT NULL,
+  title TEXT NOT NULL,
+  price NUMERIC NOT NULL DEFAULT 0,
+  price_text TEXT,
+  image_url TEXT NOT NULL,
+  product_url TEXT NOT NULL,
+  shop_name TEXT,
+  sizes TEXT[] NOT NULL DEFAULT '{}',
+  colors TEXT[] NOT NULL DEFAULT '{}',
+  style_tags TEXT[] NOT NULL DEFAULT '{}',
+  fit_tags TEXT[] NOT NULL DEFAULT '{}',
+  source_reliability NUMERIC NOT NULL DEFAULT 0,
+  score NUMERIC NOT NULL DEFAULT 0,
+  risk_flags TEXT[] NOT NULL DEFAULT '{}',
+  raw JSONB NOT NULL DEFAULT '{}',
+  source_task_id TEXT REFERENCES style_tasks(task_id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_favorite_products_user_created
+  ON favorite_products (user_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_favorite_products_user_product_marketplace
+  ON favorite_products (user_id, product_id, marketplace);
+
 CREATE TABLE IF NOT EXISTS trace_events (
   event_id BIGSERIAL PRIMARY KEY,
   task_id TEXT NOT NULL,
@@ -119,4 +220,3 @@ CREATE TABLE IF NOT EXISTS eval_case_results (
   failure_reason TEXT,
   PRIMARY KEY (eval_run_id, case_id)
 );
-
