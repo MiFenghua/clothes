@@ -48,7 +48,7 @@ fun ProgressScreen(state: UiState, modifier: Modifier = Modifier) {
         item { Spacer(Modifier.height(44.dp)) }
         item {
             Icon(Icons.Filled.AutoAwesome, null, tint = ClozColors.Lavender, modifier = Modifier.size(46.dp))
-            Text("AI 正在生成穿搭", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+            Text("AI 正在生成穿搭", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
             Text(task?.message ?: "正在分析身型、筛选单品并生成试穿图", color = ClozColors.Muted, textAlign = TextAlign.Center)
         }
         item {
@@ -75,7 +75,7 @@ fun FailureScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier 
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(Icons.Filled.CloudOff, null, tint = ClozColors.Lavender, modifier = Modifier.size(48.dp))
-        Text("生成失败", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 14.dp))
+        Text("生成失败", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
         Text(
             state.errorMessage ?: state.task?.error ?: "当前服务暂时不可用，请稍后再试。",
             color = ClozColors.Muted,

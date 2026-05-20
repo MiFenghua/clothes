@@ -10,23 +10,34 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack as ArrowBackAuto
+import androidx.compose.material.icons.outlined.Add as AddOutlined
+import androidx.compose.material.icons.outlined.AutoAwesome as AutoAwesomeOutlined
+import androidx.compose.material.icons.outlined.CalendarMonth as CalendarMonthOutlined
+import androidx.compose.material.icons.outlined.Checkroom as CheckroomOutlined
+import androidx.compose.material.icons.outlined.Favorite as FavoriteOutlined
+import androidx.compose.material.icons.outlined.FavoriteBorder as FavoriteBorderOutlined
+import androidx.compose.material.icons.outlined.Home as HomeOutlined
+import androidx.compose.material.icons.outlined.Person as PersonOutlined
+import androidx.compose.material.icons.outlined.Search as SearchOutlined
+import androidx.compose.material.icons.outlined.Settings as SettingsOutlined
+import androidx.compose.material.icons.outlined.Style as StyleOutlined
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checkroom
@@ -39,7 +50,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
-import androidx.compose.material3.Button
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,6 +58,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,6 +71,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -77,6 +90,7 @@ import com.clothes.app.categoryLabel
 import com.clothes.app.platformLabel
 import com.clothes.app.ui.theme.ClozColors
 import com.clothes.app.ui.theme.ClozDimens
+import com.clothes.app.ui.theme.ClozPrimaryGradient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
@@ -99,7 +113,8 @@ fun ClozCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(ClozDimens.CardRadius),
         color = background,
-        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, ClozColors.Line),
+        shadowElevation = 3.dp,
         tonalElevation = 0.dp,
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
@@ -114,17 +129,36 @@ fun ClozPrimaryButton(
     dark: Boolean = false,
     onClick: () -> Unit,
 ) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.fillMaxWidth().height(52.dp),
-        shape = RoundedCornerShape(ClozDimens.PillRadius),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (dark) ClozColors.Ink else ClozColors.Lavender,
-            disabledContainerColor = ClozColors.Line,
-        ),
+    val shape = RoundedCornerShape(ClozDimens.PillRadius)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val baseModifier = modifier
+        .fillMaxWidth()
+        .height(48.dp)
+        .graphicsLayer {
+            scaleX = if (pressed) 0.98f else 1f
+            scaleY = if (pressed) 0.98f else 1f
+        }
+        .clip(shape)
+        .then(
+            when {
+                !enabled -> Modifier.background(ClozColors.Disabled, shape)
+                dark -> Modifier.background(ClozColors.BlackCta, shape)
+                else -> Modifier.background(ClozPrimaryGradient, shape)
+            },
+        )
+        .clickable(
+            enabled = enabled,
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+        )
+        .padding(horizontal = 16.dp)
+    Box(
+        modifier = baseModifier,
+        contentAlignment = Alignment.Center,
     ) {
-        Text(text, fontWeight = FontWeight.Bold)
+        Text(text, color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -132,10 +166,12 @@ fun ClozPrimaryButton(
 fun ClozGhostButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(48.dp),
+        modifier = modifier.fillMaxWidth().height(44.dp),
         shape = RoundedCornerShape(ClozDimens.PillRadius),
+        border = BorderStroke(1.dp, ClozColors.Border),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = ClozColors.Paper, contentColor = ClozColors.Lavender),
     ) {
-        Text(text, fontWeight = FontWeight.Bold, color = ClozColors.Ink)
+        Text(text, fontWeight = FontWeight.SemiBold, color = ClozColors.Lavender)
     }
 }
 
@@ -150,13 +186,13 @@ fun ClozChip(
         text = text,
         modifier = modifier
             .clip(RoundedCornerShape(ClozDimens.PillRadius))
-            .background(if (selected) ClozColors.Lavender else ClozColors.Paper)
-            .border(1.dp, if (selected) ClozColors.Lavender else ClozColors.Line, RoundedCornerShape(ClozDimens.PillRadius))
+            .background(if (selected) ClozColors.LavenderSoft else ClozColors.Paper)
+            .border(1.dp, if (selected) ClozColors.LavenderSoft else ClozColors.Border, RoundedCornerShape(ClozDimens.PillRadius))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 13.dp, vertical = 8.dp),
-        color = if (selected) Color.White else ClozColors.Muted,
+        color = if (selected) ClozColors.LavenderDark else ClozColors.Muted,
         style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.SemiBold,
         maxLines = 1,
     )
 }
@@ -168,17 +204,24 @@ fun ClozTopBar(
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
-    Row(
+    Box(
         modifier = modifier.fillMaxWidth().height(44.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = ClozColors.Ink) }
-        } else {
-            Spacer(Modifier.width(8.dp))
+            IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBackAuto, contentDescription = "返回", tint = ClozColors.Ink)
+            }
         }
-        Text(title, modifier = Modifier.weight(1f), color = ClozColors.Ink, fontWeight = FontWeight.Bold)
-        actions()
+        Text(
+            title,
+            modifier = Modifier.align(Alignment.Center),
+            color = ClozColors.Ink,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(modifier = Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically, content = actions)
     }
 }
 
@@ -190,7 +233,14 @@ fun ClozBottomBar(current: AppRoute, onSelected: (AppRoute) -> Unit) {
                 selected = current == tab.route,
                 onClick = { onSelected(tab.route) },
                 icon = { Icon(tabIcon(tab.route), contentDescription = null) },
-                label = { Text(tab.label, maxLines = 1) },
+                label = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = ClozColors.Lavender,
+                    selectedTextColor = ClozColors.Lavender,
+                    indicatorColor = ClozColors.LavenderSoft.copy(alpha = 0.72f),
+                    unselectedIconColor = ClozColors.Placeholder,
+                    unselectedTextColor = ClozColors.Placeholder,
+                ),
             )
         }
     }
@@ -247,7 +297,7 @@ fun StatusPill(online: Boolean?, modifier: Modifier = Modifier, onRefresh: (() -
 @Composable
 fun SectionTitle(title: String, trailing: String? = null, modifier: Modifier = Modifier, onTrailing: (() -> Unit)? = null) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(title, color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+        Text(title, color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (trailing != null) {
             Text(
                 trailing,
@@ -262,7 +312,7 @@ fun SectionTitle(title: String, trailing: String? = null, modifier: Modifier = M
 @Composable
 fun MetricColumn(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = ClozColors.Lavender, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+        Text(value, color = ClozColors.Lavender, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Text(label, color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
     }
 }
@@ -278,7 +328,7 @@ fun ProductRow(item: OutfitItem, modifier: Modifier = Modifier, onBuy: () -> Uni
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(item.title, color = ClozColors.Ink, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(platformLabel(item.marketplace), color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
-            Text(if (item.price > 0) "￥${item.price.toInt()}" else item.priceText ?: "实时价格", color = ClozColors.Ink, fontWeight = FontWeight.ExtraBold)
+            Text(if (item.price > 0) "￥${item.price.toInt()}" else item.priceText ?: "实时价格", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
         }
         OutlinedButton(onClick = onBuy, shape = RoundedCornerShape(14.dp)) {
             Text("去购买", color = ClozColors.Lavender, style = MaterialTheme.typography.labelMedium)
@@ -294,17 +344,17 @@ fun RoundIconButton(icon: ImageVector, contentDescription: String?, onClick: () 
 }
 
 fun tabIcon(route: AppRoute): ImageVector = when (route) {
-    AppRoute.Home -> Icons.Filled.Home
-    AppRoute.Inspiration -> Icons.Filled.FavoriteBorder
-    AppRoute.Wardrobe -> Icons.Filled.Checkroom
-    AppRoute.Profile -> Icons.Filled.Person
-    AppRoute.Favorites -> Icons.Filled.Favorite
-    AppRoute.StyleGoal -> Icons.Filled.Style
-    AppRoute.UploadAnalysis -> Icons.Filled.Add
-    AppRoute.TryOn -> Icons.Filled.AutoAwesome
-    AppRoute.ShoppingList -> Icons.Filled.CalendarMonth
-    AppRoute.FeatureAnalysis -> Icons.Filled.Search
-    else -> Icons.Filled.Settings
+    AppRoute.Home -> Icons.Outlined.HomeOutlined
+    AppRoute.Inspiration -> Icons.Outlined.FavoriteBorderOutlined
+    AppRoute.Wardrobe -> Icons.Outlined.CheckroomOutlined
+    AppRoute.Profile -> Icons.Outlined.PersonOutlined
+    AppRoute.Favorites -> Icons.Outlined.FavoriteOutlined
+    AppRoute.StyleGoal -> Icons.Outlined.StyleOutlined
+    AppRoute.UploadAnalysis -> Icons.Outlined.AddOutlined
+    AppRoute.TryOn -> Icons.Outlined.AutoAwesomeOutlined
+    AppRoute.ShoppingList -> Icons.Outlined.CalendarMonthOutlined
+    AppRoute.FeatureAnalysis -> Icons.Outlined.SearchOutlined
+    else -> Icons.Outlined.SettingsOutlined
 }
 
 fun loadImageBitmap(context: Context, source: String): ImageBitmap? {
@@ -336,7 +386,7 @@ fun openUrl(context: Context, url: String) {
 @Composable
 fun ScoreText(score: Double, label: String, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(score.asPercent(), color = ClozColors.Lavender, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+        Text(score.asPercent(), color = ClozColors.Lavender, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Text(label, color = ClozColors.Muted, modifier = Modifier.padding(bottom = 4.dp), textAlign = TextAlign.Start)
     }
 }

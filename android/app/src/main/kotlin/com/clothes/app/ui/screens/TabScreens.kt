@@ -21,8 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos as ArrowForwardIosAuto
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Notifications
@@ -79,7 +79,7 @@ fun HomeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = M
             }
         }
         item {
-            Text("你好，今天想尝试\n什么风格的穿搭呢？", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+            Text("你好，今天想尝试\n什么风格的穿搭呢？", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -99,15 +99,15 @@ fun HomeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = M
         }
         item { SectionTitle("今日推荐") }
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 DemoLooks.take(3).forEach { look ->
-                    MiniLookCard(look, Modifier.weight(1f)) { viewModel.openOutfitDetail() }
+                    MiniLookCard(look, Modifier.width(128.dp)) { viewModel.openOutfitDetail() }
                 }
             }
         }
         item {
             ClozCard(background = ClozColors.LavenderSoft.copy(alpha = 0.56f)) {
-                Text("今日穿搭建议", color = ClozColors.Ink, fontWeight = FontWeight.ExtraBold)
+                Text("今日穿搭建议", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
                 Text("多云 18-24°C，适合薄外套，早晚注意保暖。", color = ClozColors.Muted, style = MaterialTheme.typography.bodySmall)
             }
         }
@@ -123,7 +123,7 @@ fun InspirationScreen(state: UiState, viewModel: StyleViewModel, modifier: Modif
     ) {
         item {
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("灵感", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                Text("灵感", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 IconButton(onClick = {}) { Icon(Icons.Filled.Search, null, tint = ClozColors.Ink) }
             }
         }
@@ -149,7 +149,7 @@ fun WardrobeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier
     ) {
         item {
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("衣橱", color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                Text("衣橱", color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Row {
                     IconButton(onClick = {}) { Icon(Icons.Filled.Search, null) }
                     IconButton(onClick = { viewModel.openWardrobeDetail(DemoWardrobeItem) }) { Icon(Icons.Filled.Add, null) }
@@ -186,7 +186,7 @@ fun FavoritesScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifie
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        item { Text("收藏", modifier = Modifier.padding(top = 12.dp), color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold) }
+        item { Text("收藏", modifier = Modifier.padding(top = 12.dp), color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 FavoriteTab.entries.forEach { tab ->
@@ -236,10 +236,10 @@ fun ProfileScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier 
         item {
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(58.dp).clip(CircleShape).background(ClozColors.LavenderSoft), contentAlignment = Alignment.Center) {
-                    Text("小", color = ClozColors.Lavender, fontWeight = FontWeight.Bold)
+                    Text("晴", color = ClozColors.Lavender, fontWeight = FontWeight.Bold)
                 }
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text("小甜甜", color = ClozColors.Ink, fontWeight = FontWeight.ExtraBold)
+                    Text("小晴", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
                     Text("编辑个人资料 〉", color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
                 }
                 IconButton(onClick = {}) { Icon(Icons.Filled.Settings, null) }
@@ -250,8 +250,8 @@ fun ProfileScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier 
             ClozCard(background = ClozColors.Lavender) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
-                        Text("clozAi PRO", color = Color.White, fontWeight = FontWeight.ExtraBold)
-                        Text("会员只需 ¥2025.09.20", color = Color.White.copy(alpha = 0.78f), style = MaterialTheme.typography.labelSmall)
+                        Text("clozAi 会员", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("已解锁 AI 试穿", color = Color.White.copy(alpha = 0.78f), style = MaterialTheme.typography.labelSmall)
                     }
                     ClozChip("去续费", selected = false)
                 }
@@ -277,7 +277,7 @@ private fun InspirationTile(look: InspirationLook, modifier: Modifier = Modifier
         OutfitPlaceholder(Modifier.fillMaxWidth().aspectRatio(0.78f),)
         Text(look.title, color = ClozColors.Ink, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(Icons.Filled.Favorite, null, tint = ClozColors.Lavender, modifier = Modifier.size(13.dp))
+            Icon(Icons.Filled.Favorite, null, tint = ClozColors.Like, modifier = Modifier.size(13.dp))
             Text((look.score * 1000).toInt().toString(), color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
         }
     }
@@ -301,6 +301,6 @@ private fun WardrobeListItem(item: WardrobeItem, viewModel: StyleViewModel) {
 private fun ProfileRow(title: String) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, modifier = Modifier.weight(1f), color = ClozColors.Ink, fontWeight = FontWeight.Bold)
-        Icon(Icons.Filled.ArrowForwardIos, null, tint = ClozColors.Line, modifier = Modifier.size(14.dp))
+        Icon(Icons.AutoMirrored.Filled.ArrowForwardIosAuto, null, tint = ClozColors.Line, modifier = Modifier.size(14.dp))
     }
 }

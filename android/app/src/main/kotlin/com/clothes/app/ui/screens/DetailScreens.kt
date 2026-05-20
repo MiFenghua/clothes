@@ -48,6 +48,7 @@ import com.clothes.app.asPercent
 import com.clothes.app.categoryLabel
 import com.clothes.app.ui.components.ClozCard
 import com.clothes.app.ui.components.ClozChip
+import com.clothes.app.ui.components.ClozGhostButton
 import com.clothes.app.ui.components.ClozPrimaryButton
 import com.clothes.app.ui.components.ClozRemoteImage
 import com.clothes.app.ui.components.ClozTopBar
@@ -81,7 +82,7 @@ fun WardrobeItemDetailScreen(state: UiState, viewModel: StyleViewModel, modifier
             GarmentPlaceholder(Modifier.fillMaxWidth().height(330.dp), item.title)
         }
         item {
-            Text(item.title, color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+            Text(item.title, color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 (item.styleTags + listOf(categoryLabel(item.category))).take(4).forEach { ClozChip(it, selected = false) }
             }
@@ -124,7 +125,7 @@ fun OutfitDetailScreen(state: UiState, viewModel: StyleViewModel, modifier: Modi
         }
         item {
             ClozCard {
-                Text("穿搭亮点", color = ClozColors.Ink, fontWeight = FontWeight.ExtraBold)
+                Text("穿搭亮点", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
                 (state.result?.outfit?.whyThisWorks?.take(3) ?: DemoReasons).forEach { reason ->
                     Text("· $reason", color = ClozColors.Muted, style = MaterialTheme.typography.bodySmall)
                 }
@@ -147,10 +148,10 @@ fun ShoppingListScreen(state: UiState, viewModel: StyleViewModel, modifier: Modi
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { ClozTopBar("搭配详情", onBack = viewModel::openOutfitDetail) }
+        item { ClozTopBar("购物清单", onBack = viewModel::openOutfitDetail) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Text("单品 (${items.size})", color = ClozColors.Lavender, fontWeight = FontWeight.ExtraBold)
+                Text("单品 (${items.size})", color = ClozColors.Lavender, fontWeight = FontWeight.SemiBold)
                 Text("套装信息", color = ClozColors.Muted, fontWeight = FontWeight.Bold)
             }
         }
@@ -199,8 +200,9 @@ fun TryOnScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = 
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ClozPrimaryButton("保存", Modifier.weight(1f), dark = false, onClick = viewModel::saveTryOnImage)
-                ClozPrimaryButton("分享", Modifier.weight(1f), dark = false, onClick = {})
+                ClozPrimaryButton("保存", Modifier.weight(1f), onClick = viewModel::saveTryOnImage)
+                ClozGhostButton("分享", Modifier.weight(1f), onClick = {})
+                ClozGhostButton("下载", Modifier.weight(1f), onClick = viewModel::saveTryOnImage)
             }
         }
     }

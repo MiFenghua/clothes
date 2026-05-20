@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -103,7 +104,7 @@ fun LoginScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f).padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     ClozLogo()
-                    Text("你好，欢迎使用\nclozAi", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("你好，欢迎使用\nclozAi", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text("AI 为你打造专属穿搭", color = ClozColors.Muted, style = MaterialTheme.typography.bodySmall)
                 }
                 ModelFigurePlaceholder(Modifier.width(142.dp).height(206.dp))
@@ -119,6 +120,17 @@ fun LoginScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = 
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     shape = RoundedCornerShape(18.dp),
+                    colors = ClozInputColors(),
+                )
+                OutlinedTextField(
+                    value = state.loginCode,
+                    onValueChange = viewModel::updateLoginCode,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("请输入验证码") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ClozInputColors(),
                 )
                 ClozPrimaryButton("获取验证码", onClick = viewModel::completeLocalLogin)
                 Text("或", modifier = Modifier.fillMaxWidth(), color = ClozColors.Muted, textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
@@ -142,7 +154,7 @@ fun StyleGoalScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifie
     ) {
         item { ClozTopBar("风格目标设置", onBack = { viewModel.navigate(com.clothes.app.AppRoute.Login) }) }
         item {
-            Text("你的风格目标是？", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+            Text("你的风格目标是？", color = ClozColors.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text("选择想要的方向优化推荐", color = ClozColors.Muted, style = MaterialTheme.typography.bodySmall)
         }
         item {
@@ -186,7 +198,7 @@ fun UploadAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Mo
     ) {
         item { ClozTopBar("上传照片与分析", onBack = { viewModel.navigate(com.clothes.app.AppRoute.Home) }) }
         item {
-            Text("上传照片，AI 分析你的身型", color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+            Text("上传照片，AI 分析你的身型", color = ClozColors.Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text("请尽量服装贴身，光线明亮", color = ClozColors.Muted, style = MaterialTheme.typography.bodySmall)
         }
         item {
@@ -198,8 +210,8 @@ fun UploadAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Mo
         item {
             ClozCard {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("AI 分析中...", color = ClozColors.Ink, fontWeight = FontWeight.Bold)
-                    Text("65%", color = ClozColors.Lavender, fontWeight = FontWeight.Bold)
+                    Text(if (state.photoUri == null) "AI 分析准备" else "AI 分析中...", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
+                    Text(if (state.photoUri == null) "待上传" else "65%", color = ClozColors.Lavender, fontWeight = FontWeight.SemiBold)
                 }
                 listOf("身型检测", "比例分析", "特征提取").forEach {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -207,7 +219,7 @@ fun UploadAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Mo
                         Text(it, color = ClozColors.Muted, style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                ClozProgressBar(0.65f)
+                ClozProgressBar(if (state.photoUri == null) 0.18f else 0.65f)
             }
         }
         item {
@@ -226,6 +238,15 @@ fun UploadAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Mo
         }
     }
 }
+
+@Composable
+private fun ClozInputColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = ClozColors.Border,
+    unfocusedBorderColor = ClozColors.Border,
+    focusedContainerColor = ClozColors.Faint,
+    unfocusedContainerColor = ClozColors.Faint,
+    cursorColor = ClozColors.Lavender,
+)
 
 @Composable
 fun FeatureAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
