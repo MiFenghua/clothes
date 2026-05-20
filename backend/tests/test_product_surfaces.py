@@ -344,3 +344,65 @@ def test_style_task_read_is_scoped_to_owner(tmp_path):
     assert first_response.json()["task_id"] == task.task_id
     assert second_response.status_code == 404
     assert anonymous_response.status_code == 404
+
+
+def test_private_task_result_retry_and_trace_are_scoped_to_owner(tmp_path):
+    client, verifier = authenticated_product_client(tmp_path)
+    first_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert first_login_response.status_code == 200
+    first_token = first_login_response.json()["session"]["token"]
+    first_user_id = first_login_response.json()["user"]["user_id"]
+
+    verifier.profile = google_profile(sub="google-sub-2", email="second@example.com", name="Second User")
+    second_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert second_login_response.status_code == 200
+    second_token = second_login_response.json()["session"]["token"]
+
+    container = get_container()
+    task = container.task_service.create_task(
+        StyleTaskRequest(
+            photo_url="/uploads/private-result.jpg",
+            photo_object_key="private-result.jpg",
+            scene=Scene.daily,
+            budget=Budget(min=300, max=800),
+        ),
+        owner_id=first_user_id,
+    )
+    container.task_service.repository.complete(
+        task.task_id,
+        StyleTaskResult(
+            task_id=task.task_id,
+            status=TaskStatus.succeeded,
+            outfit=OutfitCandidate(
+                candidate_id="outfit_private_endpoint",
+                title="Private Endpoint Look",
+                items=[],
+                total_price=0,
+                score=0.94,
+                score_breakdown={"overall": 0.94},
+                why_this_works=["private endpoint coverage"],
+            ),
+            try_on_image_url="/try-on/private-endpoint.jpg",
+        ),
+    )
+
+    result_url = f"/api/v1/style-tasks/{task.task_id}/result"
+    retry_url = f"/api/v1/style-tasks/{task.task_id}/retry-image"
+    trace_url = f"/api/v1/style-tasks/{task.task_id}/trace"
+
+    first_result_response = client.get(result_url, headers={"Authorization": f"Bearer {first_token}"})
+    second_result_response = client.get(result_url, headers={"Authorization": f"Bearer {second_token}"})
+    anonymous_result_response = client.get(result_url)
+    second_retry_response = client.post(retry_url, headers={"Authorization": f"Bearer {second_token}"})
+    anonymous_retry_response = client.post(retry_url)
+    second_trace_response = client.get(trace_url, headers={"Authorization": f"Bearer {second_token}"})
+    anonymous_trace_response = client.get(trace_url)
+
+    assert first_result_response.status_code == 200
+    assert first_result_response.json()["outfit"]["title"] == "Private Endpoint Look"
+    assert second_result_response.status_code == 404
+    assert anonymous_result_response.status_code == 404
+    assert second_retry_response.status_code == 404
+    assert anonymous_retry_response.status_code == 404
+    assert second_trace_response.status_code == 404
+    assert anonymous_trace_response.status_code == 404
