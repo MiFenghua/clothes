@@ -380,6 +380,25 @@ def test_style_task_read_is_scoped_to_owner(tmp_path):
     assert anonymous_response.status_code == 404
 
 
+def test_anonymous_ownerless_task_can_be_polled_by_id(tmp_path):
+    client = product_client(tmp_path)
+    container = get_container()
+    task = container.task_service.create_task(
+        StyleTaskRequest(
+            photo_url="/uploads/anonymous-task.jpg",
+            photo_object_key="anonymous-task.jpg",
+            scene=Scene.daily,
+            budget=Budget(min=300, max=800),
+        ),
+        owner_id=None,
+    )
+
+    response = client.get(f"/api/v1/style-tasks/{task.task_id}")
+
+    assert response.status_code == 200
+    assert response.json()["task_id"] == task.task_id
+
+
 def test_private_task_result_retry_and_trace_are_scoped_to_owner(tmp_path):
     client, verifier = authenticated_product_client(tmp_path)
     first_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
