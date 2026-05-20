@@ -373,3 +373,115 @@ def test_anonymous_wardrobe_items_only_include_anonymous_items(tmp_path):
     anonymous_titles = [item["title"] for item in anonymous_items_response.json()]
     assert "White shirt" not in anonymous_titles
     assert "Black hat" in anonymous_titles
+
+
+def test_style_task_rejects_unavailable_wardrobe_item_ids(tmp_path, monkeypatch):
+    client, verifier = auth_client(tmp_path)
+    container = get_container()
+
+    async def skip_task_run(task_id: str):
+        return container.task_service.get_task(task_id)
+
+    monkeypatch.setattr(container.task_service, "run_task", skip_task_run)
+
+    first_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert first_login_response.status_code == 200
+    first_token = first_login_response.json()["session"]["token"]
+    first_item_response = client.post(
+        "/api/v1/wardrobe-items",
+        data={"category": "top", "title": "Private shirt"},
+        files={"photo": ("shirt.jpg", b"fake image", "image/jpeg")},
+        headers={"Authorization": f"Bearer {first_token}"},
+    )
+    assert first_item_response.status_code == 201
+    first_item_id = first_item_response.json()["item_id"]
+
+    verifier.profile = profile(sub="google-sub-2", email="second@example.com", name="Second User")
+    second_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert second_login_response.status_code == 200
+    second_token = second_login_response.json()["session"]["token"]
+    second_item_response = client.post(
+        "/api/v1/wardrobe-items",
+        data={"category": "top", "title": "Second shirt"},
+        files={"photo": ("second-shirt.jpg", b"fake image", "image/jpeg")},
+        headers={"Authorization": f"Bearer {second_token}"},
+    )
+    assert second_item_response.status_code == 201
+    second_item_id = second_item_response.json()["item_id"]
+
+    blocked_response = client.post(
+        "/api/v1/style-tasks",
+        data={"wardrobe_item_ids": first_item_id},
+        files={"photo": ("person.jpg", b"fake image", "image/jpeg")},
+        headers={"Authorization": f"Bearer {second_token}"},
+    )
+    assert blocked_response.status_code == 403
+    assert blocked_response.json() == {"detail": "Wardrobe item is not available"}
+
+    allowed_response = client.post(
+        "/api/v1/style-tasks",
+        data={"wardrobe_item_ids": second_item_id},
+        files={"photo": ("person.jpg", b"fake image", "image/jpeg")},
+        headers={"Authorization": f"Bearer {second_token}"},
+    )
+    assert allowed_response.status_code == 201
+    assert allowed_response.json()["request"]["wardrobe_item_ids"] == [second_item_id]
+
+
+def test_anonymous_style_task_can_only_use_anonymous_wardrobe_items(tmp_path, monkeypatch):
+    client, _ = auth_client(tmp_path)
+    container = get_container()
+
+    async def skip_task_run(task_id: str):
+        return container.task_service.get_task(task_id)
+
+    monkeypatch.setattr(container.task_service, "run_task", skip_task_run)
+
+    login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert login_response.status_code == 200
+    token = login_response.json()["session"]["token"]
+    private_item_response = client.post(
+        "/api/v1/wardrobe-items",
+        data={"category": "top", "title": "Private shirt"},
+        files={"photo": ("shirt.jpg", b"fake image", "image/jpeg")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert private_item_response.status_code == 201
+    private_item_id = private_item_response.json()["item_id"]
+
+    anonymous_item_response = client.post(
+        "/api/v1/wardrobe-items",
+        data={"category": "accessory", "title": "Black hat"},
+        files={"photo": ("hat.jpg", b"fake image", "image/jpeg")},
+    )
+    assert anonymous_item_response.status_code == 201
+    anonymous_item_id = anonymous_item_response.json()["item_id"]
+
+    blocked_response = client.post(
+        "/api/v1/style-tasks",
+        data={"wardrobe_item_ids": private_item_id},
+        files={"photo": ("person.jpg", b"fake image", "image/jpeg")},
+    )
+    assert blocked_response.status_code == 403
+    assert blocked_response.json() == {"detail": "Wardrobe item is not available"}
+
+    allowed_response = client.post(
+        "/api/v1/style-tasks",
+        data={"wardrobe_item_ids": anonymous_item_id},
+        files={"photo": ("person.jpg", b"fake image", "image/jpeg")},
+    )
+    assert allowed_response.status_code == 201
+    assert allowed_response.json()["request"]["wardrobe_item_ids"] == [anonymous_item_id]
+
+
+def test_wardrobe_item_upload_requires_image_content_type(tmp_path):
+    client, _ = auth_client(tmp_path)
+
+    response = client.post(
+        "/api/v1/wardrobe-items",
+        data={"category": "top", "title": "Not an image"},
+        files={"photo": ("notes.txt", b"not image", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Only image uploads are supported"}

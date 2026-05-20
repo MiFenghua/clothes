@@ -88,6 +88,7 @@ async def create_style_task(
     background_tasks: BackgroundTasks,
     photo: Annotated[UploadFile, File()],
     container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
     scene: Annotated[Scene, Form()] = Scene.daily,
     budget_min: Annotated[float | None, Form()] = 300,
     budget_max: Annotated[float | None, Form()] = 800,
@@ -102,6 +103,11 @@ async def create_style_task(
 ) -> StyleTaskView:
     if not photo.content_type or not photo.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image uploads are supported")
+    selected_wardrobe_item_ids = _visible_wardrobe_item_ids(
+        container,
+        user,
+        _split_csv(wardrobe_item_ids),
+    )
     object_key, photo_url = container.storage.save_file(photo.file, photo.filename or "photo.jpg", photo.content_type)
     request = StyleTaskRequest(
         photo_url=photo_url,
@@ -116,7 +122,7 @@ async def create_style_task(
             weight_kg=weight_kg,
             usual_size=usual_size,
         ),
-        wardrobe_item_ids=_split_csv(wardrobe_item_ids),
+        wardrobe_item_ids=selected_wardrobe_item_ids,
         marketplaces=_parse_marketplaces(marketplaces),
     )
     task = container.task_service.create_task(request)
@@ -171,9 +177,7 @@ async def list_wardrobe_items(
     container: Annotated[AppContainer, Depends(container_dependency)],
     user: Annotated[PublicUser | None, Depends(current_user)],
 ) -> list[WardrobeItem]:
-    if user is not None:
-        return container.task_service.list_wardrobe_items(user.user_id)
-    return [item for item in container.task_service.list_wardrobe_items() if item.owner_id is None]
+    return _visible_wardrobe_items(container, user)
 
 
 @router.post("/api/v1/wardrobe-items", response_model=WardrobeItem, status_code=201)
@@ -188,6 +192,8 @@ async def create_wardrobe_item(
     fit_tags: Annotated[str | None, Form()] = None,
     notes: Annotated[str | None, Form()] = None,
 ) -> WardrobeItem:
+    if not photo.content_type or not photo.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported")
     object_key, image_url = container.storage.save_file(photo.file, photo.filename or "wardrobe.jpg", photo.content_type)
     item = WardrobeItem(
         item_id=f"wardrobe_{uuid4().hex[:16]}",
@@ -207,6 +213,21 @@ def _split_csv(value: str | None) -> list[str]:
     if not value:
         return []
     return [part.strip() for part in value.replace("，", ",").replace("、", ",").split(",") if part.strip()]
+
+
+def _visible_wardrobe_items(container: AppContainer, user: PublicUser | None) -> list[WardrobeItem]:
+    if user is not None:
+        return container.task_service.list_wardrobe_items(user.user_id)
+    return [item for item in container.task_service.list_wardrobe_items() if item.owner_id is None]
+
+
+def _visible_wardrobe_item_ids(container: AppContainer, user: PublicUser | None, item_ids: list[str]) -> list[str]:
+    if not item_ids:
+        return []
+    allowed_item_ids = {item.item_id for item in _visible_wardrobe_items(container, user)}
+    if any(item_id not in allowed_item_ids for item_id in item_ids):
+        raise HTTPException(status_code=403, detail="Wardrobe item is not available")
+    return item_ids
 
 
 def _parse_marketplaces(value: str | None) -> list[Marketplace]:
