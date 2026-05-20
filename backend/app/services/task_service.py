@@ -17,9 +17,9 @@ class TaskService:
     graph: StyleAgentGraph
     tracer: InMemoryTraceRecorder
 
-    def create_task(self, request: StyleTaskRequest) -> StyleTaskView:
+    def create_task(self, request: StyleTaskRequest, owner_id: str | None = None) -> StyleTaskView:
         task_id = f"task_{uuid4().hex[:16]}"
-        return self.repository.create(task_id, request)
+        return self.repository.create(task_id, request, owner_id=owner_id)
 
     async def run_task(self, task_id: str) -> StyleTaskView:
         task = self.repository.get(task_id)
@@ -69,8 +69,8 @@ class TaskService:
             raise ValueError("Task result is not ready")
         return task.result
 
-    def recent_completed_tasks(self, limit: int = 6) -> list[StyleTaskView]:
-        return self.repository.list_recent_completed(limit)
+    def recent_completed_tasks(self, owner_id: str | None = None, limit: int = 6) -> list[StyleTaskView]:
+        return self.repository.list_recent_completed(owner_id=owner_id, limit=limit)
 
     def save_wardrobe_item(self, item: WardrobeItem) -> WardrobeItem:
         return self.wardrobe_repository.save(item)

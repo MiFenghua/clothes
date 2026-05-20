@@ -112,7 +112,7 @@ async def get_home(
     profile = container.profile_repository.get(owner_id, _display_name(user))
     return build_home_view(
         profile=profile,
-        tasks=container.task_service.recent_completed_tasks(),
+        tasks=container.task_service.recent_completed_tasks(owner_id=owner_id),
         settings_status={
             "ok": True,
             "search_provider": container.settings.search_provider,
@@ -175,7 +175,7 @@ async def create_style_task(
         wardrobe_item_ids=selected_wardrobe_item_ids,
         marketplaces=_parse_marketplaces(marketplaces),
     )
-    task = container.task_service.create_task(request)
+    task = container.task_service.create_task(request, owner_id=_owner_id(user))
     background_tasks.add_task(container.task_service.run_task, task.task_id)
     return task
 

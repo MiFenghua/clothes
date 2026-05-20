@@ -29,6 +29,7 @@ class TraceEvent(BaseModel):
 
 class StyleTaskView(BaseModel):
     task_id: str
+    owner_id: str | None = None
     status: TaskStatus
     progress: int
     message: str
@@ -37,4 +38,3 @@ class StyleTaskView(BaseModel):
     error: str | None = None
     created_at: datetime
     updated_at: datetime
-

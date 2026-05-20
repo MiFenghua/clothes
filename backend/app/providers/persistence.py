@@ -13,7 +13,7 @@ def now_utc() -> datetime:
 
 
 class TaskRepository(Protocol):
-    def create(self, task_id: str, request: StyleTaskRequest) -> StyleTaskView:
+    def create(self, task_id: str, request: StyleTaskRequest, owner_id: str | None = None) -> StyleTaskView:
         ...
 
     def update_status(self, task_id: str, status: TaskStatus, message: str, progress: int) -> StyleTaskView:
@@ -28,7 +28,7 @@ class TaskRepository(Protocol):
     def get(self, task_id: str) -> StyleTaskView:
         ...
 
-    def list_recent_completed(self, limit: int = 6) -> list[StyleTaskView]:
+    def list_recent_completed(self, owner_id: str | None = None, limit: int = 6) -> list[StyleTaskView]:
         ...
 
 
@@ -36,9 +36,10 @@ class TaskRepository(Protocol):
 class InMemoryTaskRepository:
     tasks: dict[str, StyleTaskView] = field(default_factory=dict)
 
-    def create(self, task_id: str, request: StyleTaskRequest) -> StyleTaskView:
+    def create(self, task_id: str, request: StyleTaskRequest, owner_id: str | None = None) -> StyleTaskView:
         task = StyleTaskView(
             task_id=task_id,
+            owner_id=owner_id,
             status=TaskStatus.created,
             progress=2,
             message="任务已创建",
@@ -84,11 +85,13 @@ class InMemoryTaskRepository:
             raise KeyError(f"Task not found: {task_id}")
         return self.tasks[task_id]
 
-    def list_recent_completed(self, limit: int = 6) -> list[StyleTaskView]:
+    def list_recent_completed(self, owner_id: str | None = None, limit: int = 6) -> list[StyleTaskView]:
         completed = [
             task
             for task in self.tasks.values()
-            if task.result is not None and task.status in {TaskStatus.succeeded, TaskStatus.partial_succeeded}
+            if task.owner_id == owner_id
+            and task.result is not None
+            and task.status in {TaskStatus.succeeded, TaskStatus.partial_succeeded}
         ]
         completed.sort(key=lambda task: task.updated_at, reverse=True)
         return completed[:limit]
