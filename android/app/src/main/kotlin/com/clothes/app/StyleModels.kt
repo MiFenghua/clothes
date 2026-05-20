@@ -90,6 +90,7 @@ data class UiState(
     val homeView: HomeView? = null,
     val inspirationPage: InspirationPage? = null,
     val favoriteItems: List<FavoriteView> = emptyList(),
+    val favoriteItemsType: String? = null,
     val backendOnline: Boolean? = null,
     val errorMessage: String? = null,
     val isSubmitting: Boolean = false,
@@ -151,8 +152,8 @@ fun StyleForm.toStyleProfile(displayName: String = "Style User", current: StyleP
 
     return StyleProfile(
         displayName = displayName,
-        heightCm = heightCm.trimmedOrNull()?.toIntOrNull() ?: current?.heightCm ?: 168,
-        weightKg = weightKg.trimmedOrNull()?.toIntOrNull() ?: current?.weightKg ?: 50,
+        heightCm = heightCm.trimmedOrNull()?.toIntOrNull() ?: 168,
+        weightKg = weightKg.trimmedOrNull()?.toIntOrNull() ?: 50,
         bodyShape = bodyShape.trimmedOrNull(),
         skinTone = skinTone.trimmedOrNull(),
         hairTone = hairTone.trimmedOrNull(),
@@ -160,6 +161,9 @@ fun StyleForm.toStyleProfile(displayName: String = "Style User", current: StyleP
         featureMetrics = current?.featureMetrics.orEmpty(),
     )
 }
+
+val UiState.visibleBackendFavorites: List<FavoriteView>
+    get() = favoriteItems.takeIf { favoriteItemsType == favoritesTab.apiType }.orEmpty()
 
 data class StyleTaskView(
     val taskId: String,

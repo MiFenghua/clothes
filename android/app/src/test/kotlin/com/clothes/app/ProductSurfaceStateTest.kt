@@ -1,6 +1,7 @@
 package com.clothes.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -54,6 +55,41 @@ class ProductSurfaceStateTest {
     }
 
     @Test
+    fun styleFormToStyleProfileUsesUiDefaultsForBlankMeasurementsEvenWithCurrentProfile() {
+        val current = StyleProfile(
+            displayName = "Current",
+            heightCm = 170,
+            weightKg = 60,
+            bodyShape = null,
+            skinTone = null,
+            hairTone = null,
+            styleKeywords = emptyList(),
+            featureMetrics = emptyList(),
+        )
+
+        val profile = StyleForm(heightCm = "", weightKg = "").toStyleProfile(displayName = "Ada", current = current)
+
+        assertEquals(168, profile.heightCm)
+        assertEquals(50, profile.weightKg)
+    }
+
+    @Test
+    fun visibleBackendFavoritesOnlyReturnsItemsForSelectedTabType() {
+        val favorite = favoriteView(type = "outfit")
+        val state = UiState(
+            favoritesTab = FavoriteTab.Inspiration,
+            favoriteItemsType = "outfit",
+            favoriteItems = listOf(favorite),
+        )
+
+        assertTrue(state.visibleBackendFavorites.isEmpty())
+        assertEquals(
+            listOf(favorite),
+            state.copy(favoritesTab = FavoriteTab.Outfits).visibleBackendFavorites,
+        )
+    }
+
+    @Test
     fun homeRecommendationToInspirationLookPreservesCardFields() {
         val recommendation = HomeRecommendation(
             recommendationId = "rec-1",
@@ -71,5 +107,15 @@ class ProductSurfaceStateTest {
         assertEquals("commute", look.scene)
         assertEquals(0.93, look.score, 0.0001)
         assertEquals("https://example.com/rec.png", look.imageUrl)
+    }
+
+    private fun favoriteView(type: String): FavoriteView {
+        return FavoriteView(
+            favoriteId = "fav-1",
+            ownerId = "user-1",
+            favoriteType = type,
+            targetId = "target-1",
+            snapshotTitle = "Saved",
+        )
     }
 }

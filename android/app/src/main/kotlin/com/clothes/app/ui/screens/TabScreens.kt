@@ -51,6 +51,7 @@ import com.clothes.app.WardrobeItem
 import com.clothes.app.asPercent
 import com.clothes.app.categoryLabel
 import com.clothes.app.toInspirationLook
+import com.clothes.app.visibleBackendFavorites
 import com.clothes.app.ui.components.ClozCard
 import com.clothes.app.ui.components.ClozChip
 import com.clothes.app.ui.components.ClozGhostButton
@@ -195,7 +196,7 @@ fun WardrobeScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier
 
 @Composable
 fun FavoritesScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
-    val backendFavorites = state.favoriteItems
+    val backendFavorites = state.visibleBackendFavorites
     LazyColumn(
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),

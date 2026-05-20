@@ -222,12 +222,27 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openFavorites(tab: FavoriteTab = _uiState.value.favoritesTab) {
-        _uiState.update { it.copy(route = AppRoute.Favorites, favoritesTab = tab, notice = null) }
+        _uiState.update {
+            it.copy(
+                route = AppRoute.Favorites,
+                favoritesTab = tab,
+                favoriteItems = emptyList(),
+                favoriteItemsType = null,
+                notice = null,
+            )
+        }
         loadFavorites(tab.apiType)
     }
 
     fun selectFavoritesTab(tab: FavoriteTab) {
-        _uiState.update { it.copy(favoritesTab = tab, notice = null) }
+        _uiState.update {
+            it.copy(
+                favoritesTab = tab,
+                favoriteItems = emptyList(),
+                favoriteItemsType = null,
+                notice = null,
+            )
+        }
         loadFavorites(tab.apiType)
     }
 
@@ -399,6 +414,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(
                         isLoadingFavorites = false,
                         favoriteItems = favorites,
+                        favoriteItemsType = requestedType,
                     )
                 }
             } catch (error: CancellationException) {
@@ -460,6 +476,8 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                     state.copy(
                         isSavingFavorite = false,
                         favoriteItems = state.favoriteItems.filterNot { it.favoriteId == favorite.favoriteId },
+                        favoriteItemsType = state.favoriteItemsType
+                            ?: state.favoritesTab.apiType.takeIf { type -> type == favorite.favoriteType },
                     )
                 }
                 loadFavorites(_uiState.value.favoritesTab.apiType)
