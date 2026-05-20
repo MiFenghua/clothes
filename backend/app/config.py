@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     object_store_bucket: str | None = None
     google_client_id: str | None = None
     auth_store_path: Path = BACKEND_ROOT / "storage/auth-store.json"
+    product_store_path: Path = BACKEND_ROOT / "storage/product-store.json"
     auth_session_max_age_days: int = 30
     temporal_address: str = "127.0.0.1:7233"
     temporal_task_queue: str = "clothes-style-tasks"

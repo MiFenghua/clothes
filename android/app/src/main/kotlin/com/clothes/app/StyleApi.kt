@@ -12,6 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.DataOutputStream
 import java.net.HttpURLConnection
+import java.net.ProtocolException
 import java.net.URLEncoder
 import java.net.URL
 import java.util.Locale
@@ -140,7 +141,7 @@ class StyleApi(
     }
 
     suspend fun updateStyleProfile(profile: StyleProfile): StyleProfile = withContext(Dispatchers.IO) {
-        val connection = openConnection("/api/v1/profile/style", "PUT").apply {
+        val connection = openConnection("/api/v1/profile", "PATCH").apply {
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
         }
@@ -280,13 +281,23 @@ class StyleApi(
 
     private fun openConnection(path: String, method: String): HttpURLConnection {
         return (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
-            requestMethod = method
+            setRequestMethodCompat(method)
             connectTimeout = 20000
             readTimeout = 120000
             setRequestProperty("Accept", "application/json")
             authSessionStore?.token()?.let { token ->
                 setRequestProperty("Authorization", "Bearer $token")
             }
+        }
+    }
+
+    private fun HttpURLConnection.setRequestMethodCompat(method: String) {
+        try {
+            requestMethod = method
+        } catch (error: ProtocolException) {
+            if (method != "PATCH") throw error
+            requestMethod = "POST"
+            setRequestProperty("X-HTTP-Method-Override", "PATCH")
         }
     }
 

@@ -109,11 +109,32 @@ async def get_profile(
     return ProfileView(user=user, style_profile=profile)
 
 
+@router.patch("/api/v1/profile", response_model=StyleProfileView)
 @router.put("/api/v1/profile/style", response_model=StyleProfileView)
 async def update_style_profile(
     payload: StyleProfileUpdate,
     container: Annotated[AppContainer, Depends(container_dependency)],
     user: Annotated[PublicUser | None, Depends(current_user)],
+) -> StyleProfileView:
+    return _update_style_profile(payload, container, user)
+
+
+@router.post("/api/v1/profile", response_model=StyleProfileView)
+async def update_style_profile_with_method_override(
+    payload: StyleProfileUpdate,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+    x_http_method_override: Annotated[str | None, Header(alias="X-HTTP-Method-Override")] = None,
+) -> StyleProfileView:
+    if (x_http_method_override or "").upper() != "PATCH":
+        raise HTTPException(status_code=405, detail="Use PATCH /api/v1/profile")
+    return _update_style_profile(payload, container, user)
+
+
+def _update_style_profile(
+    payload: StyleProfileUpdate,
+    container: AppContainer,
+    user: PublicUser | None,
 ) -> StyleProfileView:
     if user is None:
         return container.profile_repository.preview_update(None, payload, "Style User")

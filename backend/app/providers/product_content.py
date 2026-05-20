@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
+from threading import RLock
 from uuid import uuid4
 
 from app.schemas.domain import Scene, TaskStatus
@@ -78,20 +81,23 @@ SEEDED_INSPIRATIONS: list[InspirationLook] = [
 ]
 
 
-@dataclass
 class ProfileRepository:
-    profiles: dict[str | None, StyleProfileView] = field(default_factory=dict)
+    def __init__(self, store: "ProductContentStore | Path | None" = None) -> None:
+        self.store = store if isinstance(store, ProductContentStore) else ProductContentStore(store)
 
     def get(self, owner_id: str | None, display_name: str) -> StyleProfileView:
-        if owner_id not in self.profiles:
+        self.store.load()
+        if owner_id is None or owner_id not in self.store.profiles:
             profile = default_profile(display_name)
-            self.profiles[owner_id] = profile.model_copy(update={"feature_metrics": profile_feature_metrics(profile)})
-        return self.profiles[owner_id]
+            return profile.model_copy(update={"feature_metrics": profile_feature_metrics(profile)})
+        return self.store.profiles[owner_id]
 
     def update(self, owner_id: str | None, update: StyleProfileUpdate, display_name: str) -> StyleProfileView:
         current = self.get(owner_id, display_name)
         updated = self._apply_update(current, update, display_name)
-        self.profiles[owner_id] = updated
+        if owner_id is not None:
+            self.store.profiles[owner_id] = updated
+            self.store.save()
         return updated
 
     def preview_update(self, owner_id: str | None, update: StyleProfileUpdate, display_name: str) -> StyleProfileView:
@@ -111,14 +117,15 @@ class ProfileRepository:
         return updated.model_copy(update={"feature_metrics": profile_feature_metrics(updated)})
 
 
-@dataclass
 class FavoriteRepository:
-    favorites: dict[str | None, dict[str, FavoriteView]] = field(default_factory=dict)
+    def __init__(self, store: "ProductContentStore | Path | None" = None) -> None:
+        self.store = store if isinstance(store, ProductContentStore) else ProductContentStore(store)
 
     def list_for_owner(self, owner_id: str | None, favorite_type: FavoriteType | None = None) -> list[FavoriteView]:
         if owner_id is None:
             return []
-        owner_favorites = list(self.favorites.get(owner_id, {}).values())
+        self.store.load()
+        owner_favorites = list(self.store.favorites.get(owner_id, {}).values())
         if favorite_type is None:
             return owner_favorites
         return [favorite for favorite in owner_favorites if favorite.favorite_type == favorite_type]
@@ -126,11 +133,13 @@ class FavoriteRepository:
     def save(self, owner_id: str | None, create: FavoriteCreate) -> FavoriteView:
         if owner_id is None:
             raise PermissionError("Authentication is required for favorites")
-        owner_favorites = self.favorites.setdefault(owner_id, {})
+        self.store.load()
+        owner_favorites = self.store.favorites.setdefault(owner_id, {})
         for favorite in owner_favorites.values():
             if favorite.favorite_type == create.favorite_type and favorite.target_id == create.target_id:
                 updated = favorite.model_copy(update={"snapshot": create.snapshot})
                 owner_favorites[favorite.favorite_id] = updated
+                self.store.save()
                 return updated
         favorite = FavoriteView(
             favorite_id=f"favorite_{uuid4().hex[:16]}",
@@ -140,21 +149,82 @@ class FavoriteRepository:
             snapshot=create.snapshot,
         )
         owner_favorites[favorite.favorite_id] = favorite
+        self.store.save()
         return favorite
 
     def delete(self, owner_id: str | None, favorite_id: str) -> None:
+        self.store.load()
         if owner_id is None:
-            if any(favorite_id in owner_favorites for owner_favorites in self.favorites.values()):
+            if any(favorite_id in owner_favorites for owner_favorites in self.store.favorites.values()):
                 raise PermissionError("Authentication is required for favorites")
             raise KeyError(f"Favorite not found: {favorite_id}")
-        for stored_owner_id, owner_favorites in self.favorites.items():
+        for stored_owner_id, owner_favorites in self.store.favorites.items():
             if favorite_id not in owner_favorites:
                 continue
             if stored_owner_id != owner_id:
                 raise PermissionError(f"Favorite belongs to another owner: {favorite_id}")
             owner_favorites.pop(favorite_id)
+            self.store.save()
             return None
         raise KeyError(f"Favorite not found: {favorite_id}")
+
+
+@dataclass
+class ProductContentStore:
+    store_path: Path | None = None
+    profiles: dict[str, StyleProfileView] = field(default_factory=dict)
+    favorites: dict[str, dict[str, FavoriteView]] = field(default_factory=dict)
+    _lock: object = field(default_factory=RLock, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.load()
+
+    def load(self) -> None:
+        if self.store_path is None:
+            return
+        with self._lock:
+            if not self.store_path.exists():
+                self.profiles = {}
+                self.favorites = {}
+                return
+            data = json.loads(self.store_path.read_text(encoding="utf-8"))
+            self.profiles = {
+                str(owner_id): StyleProfileView.model_validate(profile)
+                for owner_id, profile in data.get("profiles", {}).items()
+            }
+            self.favorites = {
+                str(owner_id): {
+                    str(favorite_id): FavoriteView.model_validate(favorite)
+                    for favorite_id, favorite in owner_favorites.items()
+                }
+                for owner_id, owner_favorites in data.get("favorites", {}).items()
+            }
+
+    def save(self) -> None:
+        if self.store_path is None:
+            return
+        with self._lock:
+            self.store_path.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "profiles": {
+                    owner_id: profile.model_dump(mode="json")
+                    for owner_id, profile in self.profiles.items()
+                },
+                "favorites": {
+                    owner_id: {
+                        favorite_id: favorite.model_dump(mode="json")
+                        for favorite_id, favorite in owner_favorites.items()
+                    }
+                    for owner_id, owner_favorites in self.favorites.items()
+                },
+            }
+            temp_path = self.store_path.with_name(f".{self.store_path.name}.{uuid4().hex}.tmp")
+            try:
+                temp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                temp_path.replace(self.store_path)
+            finally:
+                if temp_path.exists():
+                    temp_path.unlink()
 
 
 @dataclass

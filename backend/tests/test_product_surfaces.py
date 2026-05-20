@@ -40,6 +40,7 @@ def product_client(tmp_path) -> TestClient:
     container = get_container()
     container.settings.auth_store_path = tmp_path / "product-auth.json"
     container.auth_store = AuthStore(container.settings.auth_store_path, session_max_age_days=30)
+    _configure_product_store(container, tmp_path)
     return TestClient(create_app())
 
 
@@ -48,9 +49,19 @@ def authenticated_product_client(tmp_path) -> tuple[TestClient, FakeGoogleVerifi
     container = get_container()
     container.settings.auth_store_path = tmp_path / "product-auth.json"
     container.auth_store = AuthStore(container.settings.auth_store_path, session_max_age_days=30)
+    _configure_product_store(container, tmp_path)
     verifier = FakeGoogleVerifier()
     container.google_id_token_verifier = verifier
     return TestClient(create_app()), verifier
+
+
+def _configure_product_store(container, tmp_path) -> None:
+    store_type = getattr(product_content, "ProductContentStore", None)
+    if store_type is None:
+        return
+    container.product_store = store_type(tmp_path / "product-store.json")
+    container.profile_repository = ProfileRepository(container.product_store)
+    container.favorite_repository = FavoriteRepository(container.product_store)
 
 
 def test_profile_returns_anonymous_default(tmp_path):
@@ -117,6 +128,51 @@ def test_authenticated_style_profile_update_persists(tmp_path):
     assert profile["body_shape"] == "straight"
     assert metrics["Height"] == "175 cm"
     assert metrics["Body shape"] == "straight"
+
+
+def test_authenticated_style_profile_patch_contract_persists(tmp_path):
+    client, _ = authenticated_product_client(tmp_path)
+    login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert login_response.status_code == 200
+    token = login_response.json()["session"]["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    update_response = client.patch(
+        "/api/v1/profile",
+        json={"height_cm": 171, "body_shape": "athletic", "skin_tone": "warm", "hair_tone": "black"},
+        headers=headers,
+    )
+    get_response = client.get("/api/v1/profile", headers=headers)
+
+    assert update_response.status_code == 200
+    assert get_response.status_code == 200
+    assert get_response.json()["style_profile"]["height_cm"] == 171
+    assert get_response.json()["style_profile"]["body_shape"] == "athletic"
+
+
+def test_style_profile_post_override_supports_patch_fallback(tmp_path):
+    client, _ = authenticated_product_client(tmp_path)
+    login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert login_response.status_code == 200
+    token = login_response.json()["session"]["token"]
+
+    missing_override_response = client.post(
+        "/api/v1/profile",
+        json={"height_cm": 169},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    override_response = client.post(
+        "/api/v1/profile",
+        json={"height_cm": 169},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-HTTP-Method-Override": "PATCH",
+        },
+    )
+
+    assert missing_override_response.status_code == 405
+    assert override_response.status_code == 200
+    assert override_response.json()["height_cm"] == 169
 
 
 def test_home_returns_seeded_recommendations_without_tasks(tmp_path):
@@ -305,6 +361,37 @@ def test_favorite_save_is_idempotent_for_owner_type_and_target():
     assert second.favorite_id == first.favorite_id
     assert second.snapshot == {"title": "Updated"}
     assert len(repository.list_for_owner("owner-1")) == 1
+
+
+def test_product_content_store_persists_profiles_and_favorites(tmp_path):
+    store_type = getattr(product_content, "ProductContentStore")
+    store_path = tmp_path / "product-store.json"
+    store = store_type(store_path)
+    profile_repository = ProfileRepository(store)
+    favorite_repository = FavoriteRepository(store)
+
+    profile_repository.update(
+        "owner-1",
+        StyleProfileUpdate(height_cm=172, body_shape="petite", skin_tone="warm", hair_tone="black"),
+        "Ada",
+    )
+    favorite = favorite_repository.save(
+        "owner-1",
+        FavoriteCreate(
+            favorite_type=FavoriteType.inspiration,
+            target_id="inspiration_commute_001",
+            snapshot={"title": "Soft Tailored Commute"},
+        ),
+    )
+
+    reloaded_store = store_type(store_path)
+    reloaded_profile = ProfileRepository(reloaded_store).get("owner-1", "Ada")
+    reloaded_favorites = FavoriteRepository(reloaded_store).list_for_owner("owner-1", FavoriteType.inspiration)
+
+    assert reloaded_profile.height_cm == 172
+    assert reloaded_profile.body_shape == "petite"
+    assert [item.favorite_id for item in reloaded_favorites] == [favorite.favorite_id]
+    assert reloaded_favorites[0].snapshot == {"title": "Soft Tailored Commute"}
 
 
 def test_anonymous_favorite_save_is_rejected_and_list_is_empty():
