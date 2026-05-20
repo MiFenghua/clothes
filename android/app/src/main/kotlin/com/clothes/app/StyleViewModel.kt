@@ -18,6 +18,9 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState
     private var pollingJob: Job? = null
+    private var signInJob: Job? = null
+    private var currentUserJob: Job? = null
+    private var authGeneration = 0
 
     init {
         _uiState.update { it.copy(currentUser = authSessionStore.user()) }
@@ -102,10 +105,14 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun signInWithGoogle(googleAuthClient: GoogleAuthClient) {
-        if (_uiState.value.isSigningIn) return
-        viewModelScope.launch {
+        signInJob?.cancel()
+        authGeneration += 1
+        val generationAtStart = authGeneration
+        signInJob = viewModelScope.launch {
             _uiState.update { it.copy(isSigningIn = true, notice = null) }
-            when (val googleResult = googleAuthClient.signIn()) {
+            val googleResult = googleAuthClient.signIn()
+            if (generationAtStart != authGeneration) return@launch
+            when (googleResult) {
                 GoogleSignInResult.Cancelled -> {
                     _uiState.update { it.copy(isSigningIn = false, notice = "已取消 Google 登录") }
                 }
@@ -115,6 +122,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                 is GoogleSignInResult.Success -> {
                     try {
                         val auth = api.loginWithGoogle(googleResult.idToken)
+                        if (generationAtStart != authGeneration) return@launch
                         authSessionStore.save(auth)
                         _uiState.update {
                             it.copy(
@@ -125,6 +133,8 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                                 notice = null,
                             )
                         }
+                    } catch (error: CancellationException) {
+                        throw error
                     } catch (error: Exception) {
                         _uiState.update {
                             it.copy(
@@ -139,8 +149,13 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        authGeneration += 1
         pollingJob?.cancel()
         pollingJob = null
+        signInJob?.cancel()
+        signInJob = null
+        currentUserJob?.cancel()
+        currentUserJob = null
         viewModelScope.launch {
             runCatching { api.logout() }
             authSessionStore.clear()
@@ -326,20 +341,24 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun refreshCurrentUser() {
-        if (authSessionStore.token() == null) return
-        viewModelScope.launch {
-            runCatching { api.currentUser() }
-                .onSuccess { user ->
-                    if (user == null) {
-                        authSessionStore.clear()
-                    }
-                    _uiState.update { it.copy(currentUser = user) }
+        val tokenAtStart = authSessionStore.token() ?: return
+        currentUserJob?.cancel()
+        currentUserJob = viewModelScope.launch {
+            try {
+                val user = api.currentUser()
+                if (authSessionStore.token() != tokenAtStart) return@launch
+                if (user == null) {
+                    authSessionStore.clear()
                 }
-                .onFailure {
-                    _uiState.update { state ->
-                        state.copy(currentUser = authSessionStore.user() ?: state.currentUser)
-                    }
+                _uiState.update { it.copy(currentUser = user) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                if (authSessionStore.token() != tokenAtStart) return@launch
+                _uiState.update { state ->
+                    state.copy(currentUser = authSessionStore.user() ?: state.currentUser)
                 }
+            }
         }
     }
 
@@ -400,6 +419,8 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         pollingJob?.cancel()
+        signInJob?.cancel()
+        currentUserJob?.cancel()
         super.onCleared()
     }
 }

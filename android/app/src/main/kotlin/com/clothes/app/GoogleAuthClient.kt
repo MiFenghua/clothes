@@ -7,6 +7,7 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.CancellationException
 
 class GoogleAuthClient(private val context: Context) {
     private val credentialManager = CredentialManager.create(context)
@@ -30,6 +31,8 @@ class GoogleAuthClient(private val context: Context) {
             GoogleSignInResult.Success(credential.idToken)
         } catch (_: GetCredentialCancellationException) {
             GoogleSignInResult.Cancelled
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: GetCredentialException) {
             GoogleSignInResult.Failure(error.message ?: "Google 登录失败")
         } catch (error: Exception) {
