@@ -30,12 +30,16 @@ def default_profile(display_name: str = "Style User") -> StyleProfileView:
         skin_tone="neutral",
         hair_tone="dark brown",
         style_keywords=["clean", "modern", "relaxed"],
-        feature_metrics=[
-            FeatureMetric(label="Height", value="168 cm"),
-            FeatureMetric(label="Palette", value="neutral"),
-            FeatureMetric(label="Style", value="clean modern"),
-        ],
     )
+
+
+def profile_feature_metrics(profile: StyleProfileView) -> list[FeatureMetric]:
+    return [
+        FeatureMetric(label="Height", value=f"{profile.height_cm} cm" if profile.height_cm else "Not set"),
+        FeatureMetric(label="Body shape", value=profile.body_shape or "Not set"),
+        FeatureMetric(label="Skin tone", value=profile.skin_tone or "Not set"),
+        FeatureMetric(label="Hair tone", value=profile.hair_tone or "Not set"),
+    ]
 
 
 SEEDED_INSPIRATIONS: list[InspirationLook] = [
@@ -84,7 +88,8 @@ class ProfileRepository:
 
     def get(self, owner_id: str | None, display_name: str) -> StyleProfileView:
         if owner_id not in self.profiles:
-            self.profiles[owner_id] = default_profile(display_name)
+            profile = default_profile(display_name)
+            self.profiles[owner_id] = profile.model_copy(update={"feature_metrics": profile_feature_metrics(profile)})
         return self.profiles[owner_id]
 
     def update(self, owner_id: str | None, update: StyleProfileUpdate, display_name: str) -> StyleProfileView:
@@ -93,6 +98,7 @@ class ProfileRepository:
         if "display_name" in values and values["display_name"] is None:
             values["display_name"] = display_name
         updated = current.model_copy(update=values)
+        updated = updated.model_copy(update={"feature_metrics": profile_feature_metrics(updated)})
         self.profiles[owner_id] = updated
         return updated
 
@@ -109,6 +115,11 @@ class FavoriteRepository:
 
     def save(self, owner_id: str | None, create: FavoriteCreate) -> FavoriteView:
         owner_favorites = self.favorites.setdefault(owner_id, {})
+        for favorite in owner_favorites.values():
+            if favorite.favorite_type == create.favorite_type and favorite.target_id == create.target_id:
+                updated = favorite.model_copy(update={"snapshot": create.snapshot})
+                owner_favorites[favorite.favorite_id] = updated
+                return updated
         favorite = FavoriteView(
             favorite_id=f"favorite_{uuid4().hex[:16]}",
             owner_id=owner_id,
@@ -119,9 +130,15 @@ class FavoriteRepository:
         owner_favorites[favorite.favorite_id] = favorite
         return favorite
 
-    def delete(self, owner_id: str | None, favorite_id: str) -> bool:
-        owner_favorites = self.favorites.get(owner_id, {})
-        return owner_favorites.pop(favorite_id, None) is not None
+    def delete(self, owner_id: str | None, favorite_id: str) -> None:
+        for stored_owner_id, owner_favorites in self.favorites.items():
+            if favorite_id not in owner_favorites:
+                continue
+            if stored_owner_id != owner_id:
+                raise PermissionError(f"Favorite belongs to another owner: {favorite_id}")
+            owner_favorites.pop(favorite_id)
+            return None
+        raise KeyError(f"Favorite not found: {favorite_id}")
 
 
 @dataclass
