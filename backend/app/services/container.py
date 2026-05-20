@@ -7,7 +7,15 @@ from app.config import get_settings
 from app.providers.auth import AuthStore
 from app.providers.google_auth import GoogleOAuthIdTokenVerifier
 from app.providers.image import ArkSeedreamImageProvider, LocalTryOnImageProvider
-from app.providers.persistence import InMemoryWardrobeRepository
+from app.providers.persistence import InMemoryFavoritesRepository, InMemoryWardrobeRepository
+from app.providers.postgres import (
+    PostgresAuthStore,
+    PostgresDatabase,
+    PostgresFavoritesRepository,
+    PostgresTaskRepository,
+    PostgresTraceRecorder,
+    PostgresWardrobeRepository,
+)
 from app.providers.product_content import FavoriteRepository, InspirationRepository, ProductContentStore, ProfileRepository
 from app.providers.search import BrowserProductSearchProvider, LocalDemoSearchProvider
 from app.providers.storage import LocalObjectStorage
@@ -19,18 +27,32 @@ from app.services.task_service import TaskService, create_task_service
 class AppContainer:
     def __init__(self) -> None:
         self.settings = get_settings()
-        self.tracer = InMemoryTraceRecorder()
         self.storage = LocalObjectStorage(self.settings)
-        self.auth_store = AuthStore(
-            self.settings.auth_store_path,
-            session_max_age_days=self.settings.auth_session_max_age_days,
-        )
+        self.postgres_database = PostgresDatabase(self.settings.postgres_dsn) if self.settings.postgres_dsn else None
+        if self.postgres_database is not None:
+            self.postgres_database.check_connection()
+            self.tracer = PostgresTraceRecorder(self.postgres_database)
+            self.auth_store = PostgresAuthStore(
+                self.postgres_database,
+                session_max_age_days=self.settings.auth_session_max_age_days,
+            )
+            self.wardrobe_repository = PostgresWardrobeRepository(self.postgres_database)
+            self.task_repository = PostgresTaskRepository(self.postgres_database)
+            self.favorites_repository = PostgresFavoritesRepository(self.postgres_database)
+        else:
+            self.tracer = InMemoryTraceRecorder()
+            self.auth_store = AuthStore(
+                self.settings.auth_store_path,
+                session_max_age_days=self.settings.auth_session_max_age_days,
+            )
+            self.wardrobe_repository = InMemoryWardrobeRepository()
+            self.task_repository = None
+            self.favorites_repository = InMemoryFavoritesRepository()
         self.google_id_token_verifier = GoogleOAuthIdTokenVerifier(self.settings.google_client_id)
         self.photo_provider = self._create_photo_provider()
         self.search_provider = self._create_search_provider()
         self.image_provider = self._create_image_provider()
         self.image_quality_provider = self._create_image_quality_provider()
-        self.wardrobe_repository = InMemoryWardrobeRepository()
         self.product_store = ProductContentStore(self.settings.product_store_path)
         self.profile_repository = ProfileRepository(self.product_store)
         self.favorite_repository = FavoriteRepository(self.product_store)
@@ -48,6 +70,8 @@ class AppContainer:
             self.graph,
             self.tracer,
             wardrobe_repository=self.wardrobe_repository,
+            favorites_repository=self.favorites_repository,
+            repository=self.task_repository,
         )
 
     def _create_photo_provider(self):
