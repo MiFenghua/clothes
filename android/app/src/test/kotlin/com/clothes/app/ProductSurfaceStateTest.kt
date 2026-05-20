@@ -108,6 +108,12 @@ class ProductSurfaceStateTest {
     }
 
     @Test
+    fun unauthorizedApiErrorsAreDetectedFromStatusCode() {
+        assertTrue(StyleApiException(401, "Authentication is required").isUnauthorizedApiError())
+        assertTrue(!StyleApiException(500, "Server error").isUnauthorizedApiError())
+    }
+
+    @Test
     fun localProfilePreviewSkipsAnonymousProfileRefresh() {
         assertTrue(UiState().shouldRefreshProfileFromBackend(hasAuthToken = false))
         assertTrue(UiState(hasLocalStyleProfilePreview = true).shouldRefreshProfileFromBackend(hasAuthToken = true))

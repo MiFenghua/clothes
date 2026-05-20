@@ -50,7 +50,6 @@ SEEDED_INSPIRATIONS: list[InspirationLook] = [
         palette="charcoal, ivory, slate blue",
         note="Structured layers with comfortable shoes for repeat weekday wear.",
         score=0.92,
-        image_url="/static/inspirations/commute-soft-tailored.jpg",
     ),
     InspirationLook(
         inspiration_id="inspiration_date_001",
@@ -59,7 +58,6 @@ SEEDED_INSPIRATIONS: list[InspirationLook] = [
         palette="black, pearl, wine",
         note="A simple column shape with one warmer accent.",
         score=0.9,
-        image_url="/static/inspirations/date-quiet-dinner.jpg",
     ),
     InspirationLook(
         inspiration_id="inspiration_travel_001",
@@ -68,7 +66,6 @@ SEEDED_INSPIRATIONS: list[InspirationLook] = [
         palette="olive, white, denim",
         note="Light layers that can rotate across a short trip.",
         score=0.88,
-        image_url="/static/inspirations/travel-weekend.jpg",
     ),
     InspirationLook(
         inspiration_id="inspiration_daily_001",
@@ -77,7 +74,6 @@ SEEDED_INSPIRATIONS: list[InspirationLook] = [
         palette="cream, navy, soft grey",
         note="Low-effort basics with enough contrast to feel intentional.",
         score=0.87,
-        image_url="/static/inspirations/daily-clean-ease.jpg",
     ),
 ]
 

@@ -428,6 +428,10 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (error.isUnauthorizedApiError()) {
+                    expireAuthSessionForFavorites(requestedType, error.message ?: "Sign in to use favorites")
+                    return@launch
+                }
                 if (generationAtStart != authGeneration) return@launch
                 if (_uiState.value.favoritesTab.apiType != requestedType) return@launch
                 _uiState.update {
@@ -463,6 +467,10 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (error.isUnauthorizedApiError()) {
+                    expireAuthSessionForFavorites(_uiState.value.favoritesTab.apiType, error.message ?: "Sign in to save favorites")
+                    return@launch
+                }
                 if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
@@ -494,6 +502,10 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (error.isUnauthorizedApiError()) {
+                    expireAuthSessionForFavorites(_uiState.value.favoritesTab.apiType, error.message ?: "Unable to update favorites")
+                    return@launch
+                }
                 if (generationAtStart != authGeneration) return@launch
                 _uiState.update {
                     it.copy(
@@ -593,6 +605,25 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun hasAuthToken(): Boolean = authSessionStore.token() != null
+
+    private fun expireAuthSessionForFavorites(favoriteType: String, message: String) {
+        authGeneration += 1
+        authSessionStore.clear()
+        currentUserJob?.cancel()
+        currentUserJob = null
+        _uiState.update {
+            it.copy(
+                currentUser = null,
+                profileView = null,
+                homeView = null,
+                favoriteItems = emptyList(),
+                favoriteItemsType = favoriteType,
+                isLoadingFavorites = false,
+                isSavingFavorite = false,
+                notice = message,
+            )
+        }
+    }
 
     private fun cancelProductSurfaceJobs() {
         profileJob?.cancel()

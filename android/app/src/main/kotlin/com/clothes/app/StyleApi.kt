@@ -16,6 +16,10 @@ import java.net.URLEncoder
 import java.net.URL
 import java.util.Locale
 
+class StyleApiException(val statusCode: Int, message: String) : IllegalStateException(message)
+
+fun Throwable.isUnauthorizedApiError(): Boolean = this is StyleApiException && statusCode == HttpURLConnection.HTTP_UNAUTHORIZED
+
 class StyleApi(
     private val context: Context,
     private val baseUrl: String,
@@ -317,10 +321,11 @@ class StyleApi(
     }
 
     private fun readResponse(connection: HttpURLConnection): String {
-        val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
+        val statusCode = connection.responseCode
+        val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
         val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-        if (connection.responseCode !in 200..299) {
-            throw IllegalStateException(errorMessage(text).ifBlank { "请求失败：${connection.responseCode}" })
+        if (statusCode !in 200..299) {
+            throw StyleApiException(statusCode, errorMessage(text).ifBlank { "请求失败：$statusCode" })
         }
         return text
     }

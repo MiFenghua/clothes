@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.providers.auth import AuthStore, GoogleProfile
 from app.providers.google_auth import GoogleIdTokenVerifier
+from app.providers import product_content
 from app.providers.product_content import FavoriteRepository, ProfileRepository
 from app.schemas.domain import Budget, OutfitCandidate, Scene, StyleTaskRequest, TaskStatus
 from app.schemas.product import FavoriteCreate, FavoriteType, StyleProfileUpdate
@@ -127,6 +130,20 @@ def test_home_returns_seeded_recommendations_without_tasks(tmp_path):
     assert len(body["recommendations"]) >= 3
     assert body["today_suggestion"]["title"]
     assert body["backend_status"]["ok"] is True
+
+
+def test_seeded_inspiration_image_urls_do_not_reference_missing_static_assets():
+    static_root = Path(product_content.__file__).resolve().parents[1] / "static"
+
+    missing = [
+        look.image_url
+        for look in product_content.SEEDED_INSPIRATIONS
+        if look.image_url
+        and look.image_url.startswith("/static/")
+        and not (static_root / look.image_url.removeprefix("/static/")).exists()
+    ]
+
+    assert missing == []
 
 
 def test_inspirations_can_filter_by_scene(tmp_path):
