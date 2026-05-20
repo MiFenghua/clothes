@@ -90,6 +90,13 @@ class ProductSurfaceStateTest {
     }
 
     @Test
+    fun localProfilePreviewSkipsAnonymousProfileRefresh() {
+        assertTrue(UiState().shouldRefreshProfileFromBackend(hasAuthToken = false))
+        assertTrue(UiState(hasLocalStyleProfilePreview = true).shouldRefreshProfileFromBackend(hasAuthToken = true))
+        assertTrue(!UiState(hasLocalStyleProfilePreview = true).shouldRefreshProfileFromBackend(hasAuthToken = false))
+    }
+
+    @Test
     fun homeRecommendationToInspirationLookPreservesCardFields() {
         val recommendation = HomeRecommendation(
             recommendationId = "rec-1",

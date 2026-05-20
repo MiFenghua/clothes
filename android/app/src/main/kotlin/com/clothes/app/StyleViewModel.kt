@@ -43,6 +43,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
         loadWardrobe()
         val generationAtStart = authGeneration
         viewModelScope.launch {
+            val hasAuthTokenAtStart = hasAuthToken()
             val state = _uiState.value
             val profile = state.form.toStyleProfile(
                 displayName = state.currentUser?.name
@@ -57,6 +58,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                     current.copy(
                         profileView = current.profileView?.copy(styleProfile = saved)
                             ?: ProfileView(user = current.currentUser, styleProfile = saved),
+                        hasLocalStyleProfilePreview = !hasAuthTokenAtStart,
                         notice = null,
                     )
                 }
@@ -166,6 +168,7 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
                             it.copy(
                                 isSigningIn = false,
                                 currentUser = auth.user,
+                                hasLocalStyleProfilePreview = false,
                                 route = AppRoute.StyleGoal,
                                 previousRoute = AppRoute.Login,
                                 notice = null,
@@ -317,12 +320,17 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshProfile() {
         if (_uiState.value.isLoadingProfile) return
+        if (!_uiState.value.shouldRefreshProfileFromBackend(hasAuthToken())) return
         val generationAtStart = authGeneration
         profileJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoadingProfile = true) }
             try {
                 val profile = api.getProfile()
                 if (generationAtStart != authGeneration) return@launch
+                if (!_uiState.value.shouldRefreshProfileFromBackend(hasAuthToken())) {
+                    _uiState.update { it.copy(isLoadingProfile = false) }
+                    return@launch
+                }
                 _uiState.update {
                     it.copy(
                         isLoadingProfile = false,
@@ -581,6 +589,8 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
         refreshProfile()
         refreshHome()
     }
+
+    private fun hasAuthToken(): Boolean = authSessionStore.token() != null
 
     private fun cancelProductSurfaceJobs() {
         profileJob?.cancel()

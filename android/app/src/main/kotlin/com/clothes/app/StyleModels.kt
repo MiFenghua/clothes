@@ -87,6 +87,7 @@ data class UiState(
     val selectedWardrobeItem: WardrobeItem? = null,
     val currentUser: PublicUser? = null,
     val profileView: ProfileView? = null,
+    val hasLocalStyleProfilePreview: Boolean = false,
     val homeView: HomeView? = null,
     val inspirationPage: InspirationPage? = null,
     val favoriteItems: List<FavoriteView> = emptyList(),
@@ -164,6 +165,10 @@ fun StyleForm.toStyleProfile(displayName: String = "Style User", current: StyleP
 
 val UiState.visibleBackendFavorites: List<FavoriteView>
     get() = favoriteItems.takeIf { favoriteItemsType == favoritesTab.apiType }.orEmpty()
+
+fun UiState.shouldRefreshProfileFromBackend(hasAuthToken: Boolean): Boolean {
+    return hasAuthToken || !hasLocalStyleProfilePreview
+}
 
 data class StyleTaskView(
     val taskId: String,

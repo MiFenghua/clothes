@@ -88,6 +88,18 @@ class ProductParsingTest {
     }
 
     @Test
+    fun normalizeBackendAssetUrlExpandsRelativeStaticPaths() {
+        assertEquals(
+            "http://10.0.2.2:8000/static/inspiration.png",
+            normalizeBackendAssetUrl("http://10.0.2.2:8000", "/static/inspiration.png"),
+        )
+        assertEquals(
+            "http://10.0.2.2:8000/static/inspiration.png",
+            normalizeBackendAssetUrl("http://10.0.2.2:8000", "http://127.0.0.1:8000/static/inspiration.png"),
+        )
+    }
+
+    @Test
     fun parseInspirationPageMapsItemsAndCursor() {
         val json = JSONObject(
             """

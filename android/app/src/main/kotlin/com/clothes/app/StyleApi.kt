@@ -161,7 +161,7 @@ class StyleApi(
     suspend fun getHome(): HomeView = withContext(Dispatchers.IO) {
         val connection = openConnection("/api/v1/home", "GET")
         try {
-            parseHomeView(JSONObject(readResponse(connection)))
+            normalizeHomeView(parseHomeView(JSONObject(readResponse(connection))))
         } finally {
             connection.disconnect()
         }
@@ -173,7 +173,7 @@ class StyleApi(
             ?: "/api/v1/inspirations"
         val connection = openConnection(path, "GET")
         try {
-            parseInspirationPage(JSONObject(readResponse(connection)))
+            normalizeInspirationPage(parseInspirationPage(JSONObject(readResponse(connection))))
         } finally {
             connection.disconnect()
         }
@@ -373,14 +373,39 @@ class StyleApi(
         return item.copy(imageUrl = normalizeAssetUrl(item.imageUrl))
     }
 
+    private fun normalizeHomeView(home: HomeView): HomeView {
+        return home.copy(recommendations = home.recommendations.map(::normalizeHomeRecommendation))
+    }
+
+    private fun normalizeHomeRecommendation(recommendation: HomeRecommendation): HomeRecommendation {
+        return recommendation.copy(imageUrl = recommendation.imageUrl?.let(::normalizeAssetUrl))
+    }
+
+    private fun normalizeInspirationPage(page: InspirationPage): InspirationPage {
+        return page.copy(items = page.items.map(::normalizeInspirationLook))
+    }
+
+    private fun normalizeInspirationLook(look: InspirationLook): InspirationLook {
+        return look.copy(imageUrl = look.imageUrl?.let(::normalizeAssetUrl))
+    }
+
     private fun normalizeAssetUrl(url: String): String {
-        val hostBase = baseUrl.trimEnd('/')
-        return url
-            .replace("http://127.0.0.1:8000", hostBase)
-            .replace("http://localhost:8000", hostBase)
+        return normalizeBackendAssetUrl(baseUrl, url)
     }
 
     private fun urlEncode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
+}
+
+fun normalizeBackendAssetUrl(baseUrl: String, url: String): String {
+    val hostBase = baseUrl.trimEnd('/')
+    return when {
+        url.isBlank() -> url
+        url.startsWith("data:", ignoreCase = true) -> url
+        url.startsWith("/") -> hostBase + url
+        else -> url
+            .replace("http://127.0.0.1:8000", hostBase)
+            .replace("http://localhost:8000", hostBase)
+    }
 }
 
 fun parseProfileView(json: JSONObject): ProfileView {
@@ -625,7 +650,7 @@ private fun JSONObject?.toStringMap(): Map<String, String> {
     if (this == null) return emptyMap()
     val result = linkedMapOf<String, String>()
     keys().forEach { key ->
-        if (!isNull(key)) result[key] = opt(key).toString()
+        if (!isNull(key)) opt(key)?.toString()?.let { result[key] = it }
     }
     return result
 }
