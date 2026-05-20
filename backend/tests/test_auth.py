@@ -306,3 +306,29 @@ def test_logout_without_token_is_idempotent(tmp_path):
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
+
+
+def test_wardrobe_items_are_scoped_to_current_user(tmp_path):
+    client, verifier = auth_client(tmp_path)
+    first_login = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"}).json()
+    first_token = first_login["session"]["token"]
+
+    verifier.profile = profile(sub="google-sub-2", email="second@example.com", name="Second User")
+    second_login = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"}).json()
+    second_token = second_login["session"]["token"]
+
+    files = {"photo": ("shirt.jpg", b"fake image", "image/jpeg")}
+    data = {"category": "top", "title": "White shirt"}
+    create_response = client.post(
+        "/api/v1/wardrobe-items",
+        data=data,
+        files=files,
+        headers={"Authorization": f"Bearer {first_token}"},
+    )
+    assert create_response.status_code == 201
+
+    first_items = client.get("/api/v1/wardrobe-items", headers={"Authorization": f"Bearer {first_token}"}).json()
+    second_items = client.get("/api/v1/wardrobe-items", headers={"Authorization": f"Bearer {second_token}"}).json()
+
+    assert [item["title"] for item in first_items] == ["White shirt"]
+    assert second_items == []

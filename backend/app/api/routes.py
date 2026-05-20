@@ -167,8 +167,11 @@ async def get_style_task_trace(task_id: str, container: Annotated[AppContainer, 
 
 
 @router.get("/api/v1/wardrobe-items", response_model=list[WardrobeItem])
-async def list_wardrobe_items(container: Annotated[AppContainer, Depends(container_dependency)]) -> list[WardrobeItem]:
-    return container.task_service.list_wardrobe_items()
+async def list_wardrobe_items(
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> list[WardrobeItem]:
+    return container.task_service.list_wardrobe_items(user.user_id if user else None)
 
 
 @router.post("/api/v1/wardrobe-items", response_model=WardrobeItem, status_code=201)
@@ -177,6 +180,7 @@ async def create_wardrobe_item(
     category: Annotated[ProductCategory, Form()],
     title: Annotated[str, Form()],
     container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
     colors: Annotated[str | None, Form()] = None,
     style_tags: Annotated[str | None, Form()] = None,
     fit_tags: Annotated[str | None, Form()] = None,
@@ -192,6 +196,7 @@ async def create_wardrobe_item(
         style_tags=_split_csv(style_tags),
         fit_tags=_split_csv(fit_tags),
         notes=notes or object_key,
+        owner_id=user.user_id if user else None,
     )
     return container.task_service.save_wardrobe_item(item)
 
