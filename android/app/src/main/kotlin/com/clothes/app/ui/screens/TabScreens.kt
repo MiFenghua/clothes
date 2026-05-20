@@ -50,6 +50,7 @@ import com.clothes.app.asPercent
 import com.clothes.app.categoryLabel
 import com.clothes.app.ui.components.ClozCard
 import com.clothes.app.ui.components.ClozChip
+import com.clothes.app.ui.components.ClozGhostButton
 import com.clothes.app.ui.components.ClozLogo
 import com.clothes.app.ui.components.ClozPrimaryButton
 import com.clothes.app.ui.components.ClozProgressBar
@@ -247,6 +248,13 @@ fun ProfileScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier 
             }
         }
         item {
+            Text(
+                state.currentUser?.email ?: "未登录",
+                color = ClozColors.Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        item {
             ClozCard(background = ClozColors.Lavender) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
@@ -259,6 +267,9 @@ fun ProfileScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier 
         }
         items(listOf("我的特征分析", "订单记录", "我的尺码", "地址管理", "隐私设置", "帮助与反馈", "关于 clozAi")) { title ->
             ProfileRow(title)
+        }
+        item {
+            ClozGhostButton("退出登录", onClick = viewModel::logout)
         }
     }
 }

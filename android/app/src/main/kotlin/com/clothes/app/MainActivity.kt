@@ -70,7 +70,7 @@ fun ClozAiApp(viewModel: StyleViewModel, googleAuthClient: GoogleAuthClient) {
         val modifier = Modifier.padding(padding)
         when (state.route) {
             AppRoute.Splash -> SplashScreen(state, viewModel, modifier)
-            AppRoute.Login -> LoginScreen(state, viewModel, modifier)
+            AppRoute.Login -> LoginScreen(state, viewModel, googleAuthClient, modifier)
             AppRoute.StyleGoal -> StyleGoalScreen(state, viewModel, modifier)
             AppRoute.UploadAnalysis -> UploadAnalysisScreen(state, viewModel, modifier)
             AppRoute.FeatureAnalysis -> FeatureAnalysisScreen(state, viewModel, modifier)

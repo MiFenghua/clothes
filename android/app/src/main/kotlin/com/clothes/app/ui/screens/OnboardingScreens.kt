@@ -22,14 +22,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,10 +35,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.clothes.app.BodyShapeOptions
+import com.clothes.app.GoogleAuthClient
 import com.clothes.app.SceneOptions
 import com.clothes.app.SkinToneOptions
 import com.clothes.app.StyleGoalOptions
@@ -50,7 +47,6 @@ import com.clothes.app.UiState
 import com.clothes.app.ui.components.BodyOutlinePlaceholder
 import com.clothes.app.ui.components.ClozCard
 import com.clothes.app.ui.components.ClozChip
-import com.clothes.app.ui.components.ClozGhostButton
 import com.clothes.app.ui.components.ClozLogo
 import com.clothes.app.ui.components.ClozPrimaryButton
 import com.clothes.app.ui.components.ClozProgressBar
@@ -94,7 +90,12 @@ fun SplashScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier =
 }
 
 @Composable
-fun LoginScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
+fun LoginScreen(
+    state: UiState,
+    viewModel: StyleViewModel,
+    googleAuthClient: GoogleAuthClient,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(
         modifier = modifier.fillMaxSize().background(ClozColors.Page).padding(horizontal = ClozDimens.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -112,34 +113,19 @@ fun LoginScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = 
         }
         item {
             ClozCard {
-                OutlinedTextField(
-                    value = state.loginPhone,
-                    onValueChange = viewModel::updateLoginPhone,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("请输入手机号") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ClozInputColors(),
+                Text("登录后保存你的身型档案、衣橱和推荐记录", color = ClozColors.Ink, fontWeight = FontWeight.SemiBold)
+                ClozPrimaryButton(
+                    text = if (state.isSigningIn) "正在连接 Google..." else "使用 Google 登录",
+                    enabled = !state.isSigningIn,
+                    onClick = { viewModel.signInWithGoogle(googleAuthClient) },
                 )
-                OutlinedTextField(
-                    value = state.loginCode,
-                    onValueChange = viewModel::updateLoginCode,
+                Text(
+                    "继续即表示你同意《用户协议》与《隐私政策》",
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("请输入验证码") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ClozInputColors(),
+                    color = ClozColors.Muted,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelSmall,
                 )
-                ClozPrimaryButton("获取验证码", onClick = viewModel::completeLocalLogin)
-                Text("或", modifier = Modifier.fillMaxWidth(), color = ClozColors.Muted, textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
-                ClozGhostButton("微信一键登录", onClick = viewModel::completeLocalLogin)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Check, null, tint = ClozColors.WeChat, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("未注册的手机号将自动创建账号", color = ClozColors.Muted, style = MaterialTheme.typography.labelSmall)
-                }
             }
         }
     }
@@ -238,15 +224,6 @@ fun UploadAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Mo
         }
     }
 }
-
-@Composable
-private fun ClozInputColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = ClozColors.Border,
-    unfocusedBorderColor = ClozColors.Border,
-    focusedContainerColor = ClozColors.Faint,
-    unfocusedContainerColor = ClozColors.Faint,
-    cursorColor = ClozColors.Lavender,
-)
 
 @Composable
 fun FeatureAnalysisScreen(state: UiState, viewModel: StyleViewModel, modifier: Modifier = Modifier) {
