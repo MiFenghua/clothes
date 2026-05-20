@@ -229,6 +229,70 @@ data class InspirationLook(
     val palette: String,
     val note: String,
     val score: Double,
+    val inspirationId: String = "",
+    val imageUrl: String? = null,
+    val favoriteId: String? = null,
+)
+
+data class FeatureMetric(
+    val label: String,
+    val value: Double,
+)
+
+data class StyleProfile(
+    val displayName: String,
+    val heightCm: Int?,
+    val weightKg: Int?,
+    val bodyShape: String?,
+    val skinTone: String?,
+    val hairTone: String?,
+    val styleKeywords: List<String>,
+    val featureMetrics: List<FeatureMetric>,
+)
+
+data class ProfileView(
+    val user: PublicUser?,
+    val styleProfile: StyleProfile,
+)
+
+data class FeatureSummary(
+    val score: Double,
+    val title: String,
+    val summary: String,
+)
+
+data class HomeRecommendation(
+    val recommendationId: String,
+    val title: String,
+    val scene: String,
+    val score: Double,
+    val imageUrl: String?,
+    val sourceTaskId: String,
+)
+
+data class TodaySuggestion(
+    val title: String,
+    val body: String,
+)
+
+data class HomeView(
+    val featureSummary: FeatureSummary,
+    val recommendations: List<HomeRecommendation>,
+    val todaySuggestion: TodaySuggestion,
+    val backendStatus: Map<String, String>,
+)
+
+data class InspirationPage(
+    val items: List<InspirationLook>,
+    val nextCursor: String?,
+)
+
+data class FavoriteView(
+    val favoriteId: String,
+    val ownerId: String,
+    val favoriteType: String,
+    val targetId: String,
+    val snapshotTitle: String?,
 )
 
 val InspirationLooks = listOf(

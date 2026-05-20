@@ -12,6 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.DataOutputStream
 import java.net.HttpURLConnection
+import java.net.URLEncoder
 import java.net.URL
 import java.util.Locale
 
@@ -120,6 +121,99 @@ class StyleApi(
         }
         try {
             normalizeTaskView(parseTaskView(readResponse(connection)))
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun getProfile(): ProfileView = withContext(Dispatchers.IO) {
+        val connection = openConnection("/api/v1/profile", "GET")
+        try {
+            parseProfileView(JSONObject(readResponse(connection)))
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun updateStyleProfile(profile: StyleProfile): StyleProfile = withContext(Dispatchers.IO) {
+        val connection = openConnection("/api/v1/profile/style", "PUT").apply {
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+        }
+        try {
+            val body = JSONObject()
+                .put("display_name", profile.displayName)
+                .putNullable("height_cm", profile.heightCm)
+                .putNullable("weight_kg", profile.weightKg)
+                .putNullable("body_shape", profile.bodyShape)
+                .putNullable("skin_tone", profile.skinTone)
+                .putNullable("hair_tone", profile.hairTone)
+                .put("style_keywords", JSONArray(profile.styleKeywords))
+                .toString()
+                .toByteArray(Charsets.UTF_8)
+            connection.outputStream.use { it.write(body) }
+            parseStyleProfile(JSONObject(readResponse(connection)))
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun getHome(): HomeView = withContext(Dispatchers.IO) {
+        val connection = openConnection("/api/v1/home", "GET")
+        try {
+            parseHomeView(JSONObject(readResponse(connection)))
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun getInspirations(scene: String? = null): InspirationPage = withContext(Dispatchers.IO) {
+        val path = scene?.takeIf { it.isNotBlank() }
+            ?.let { "/api/v1/inspirations?scene=${urlEncode(it)}" }
+            ?: "/api/v1/inspirations"
+        val connection = openConnection(path, "GET")
+        try {
+            parseInspirationPage(JSONObject(readResponse(connection)))
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun getFavorites(type: String): List<FavoriteView> = withContext(Dispatchers.IO) {
+        val connection = openConnection("/api/v1/favorites?type=${urlEncode(type)}", "GET")
+        try {
+            parseFavorites(JSONArray(readResponse(connection)))
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun saveFavorite(type: String, targetId: String, snapshotTitle: String? = null): FavoriteView =
+        withContext(Dispatchers.IO) {
+            val connection = openConnection("/api/v1/favorites", "POST").apply {
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+            }
+            try {
+                val snapshot = JSONObject()
+                snapshotTitle?.takeIf { it.isNotBlank() }?.let { snapshot.put("title", it) }
+                val body = JSONObject()
+                    .put("favorite_type", type)
+                    .put("target_id", targetId)
+                    .put("snapshot", snapshot)
+                    .toString()
+                    .toByteArray(Charsets.UTF_8)
+                connection.outputStream.use { it.write(body) }
+                parseFavorite(JSONObject(readResponse(connection)))
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+    suspend fun deleteFavorite(favoriteId: String) = withContext(Dispatchers.IO) {
+        val connection = openConnection("/api/v1/favorites/${urlEncode(favoriteId)}", "DELETE")
+        try {
+            readResponse(connection)
         } finally {
             connection.disconnect()
         }
@@ -285,6 +379,104 @@ class StyleApi(
             .replace("http://127.0.0.1:8000", hostBase)
             .replace("http://localhost:8000", hostBase)
     }
+
+    private fun urlEncode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
+}
+
+fun parseProfileView(json: JSONObject): ProfileView {
+    return ProfileView(
+        user = json.optJSONObject("user")?.let(::parsePublicUser),
+        styleProfile = parseStyleProfile(json.getJSONObject("style_profile")),
+    )
+}
+
+fun parseStyleProfile(json: JSONObject): StyleProfile {
+    return StyleProfile(
+        displayName = json.optString("display_name"),
+        heightCm = json.optNullableInt("height_cm"),
+        weightKg = json.optNullableInt("weight_kg"),
+        bodyShape = json.optNullableString("body_shape"),
+        skinTone = json.optNullableString("skin_tone"),
+        hairTone = json.optNullableString("hair_tone"),
+        styleKeywords = json.optJSONArray("style_keywords").toStringList(),
+        featureMetrics = json.optJSONArray("feature_metrics").toObjectList(::parseFeatureMetric),
+    )
+}
+
+fun parseFeatureMetric(json: JSONObject): FeatureMetric {
+    return FeatureMetric(
+        label = json.optString("label"),
+        value = json.optDouble("value"),
+    )
+}
+
+fun parseHomeView(json: JSONObject): HomeView {
+    return HomeView(
+        featureSummary = parseFeatureSummary(json.getJSONObject("feature_summary")),
+        recommendations = json.optJSONArray("recommendations").toObjectList(::parseHomeRecommendation),
+        todaySuggestion = parseTodaySuggestion(json.getJSONObject("today_suggestion")),
+        backendStatus = json.optJSONObject("backend_status").toStringMap(),
+    )
+}
+
+fun parseFeatureSummary(json: JSONObject): FeatureSummary {
+    return FeatureSummary(
+        score = json.optDouble("score"),
+        title = json.optString("title"),
+        summary = json.optString("summary"),
+    )
+}
+
+fun parseHomeRecommendation(json: JSONObject): HomeRecommendation {
+    return HomeRecommendation(
+        recommendationId = json.optString("recommendation_id"),
+        title = json.optString("title"),
+        scene = json.optString("scene"),
+        score = json.optDouble("score"),
+        imageUrl = json.optNullableString("image_url"),
+        sourceTaskId = json.optString("source_task_id"),
+    )
+}
+
+fun parseTodaySuggestion(json: JSONObject): TodaySuggestion {
+    return TodaySuggestion(
+        title = json.optString("title"),
+        body = json.optString("body"),
+    )
+}
+
+fun parseInspirationPage(json: JSONObject): InspirationPage {
+    return InspirationPage(
+        items = json.optJSONArray("items").toObjectList(::parseInspirationLook),
+        nextCursor = json.optNullableString("next_cursor"),
+    )
+}
+
+fun parseInspirationLook(json: JSONObject): InspirationLook {
+    return InspirationLook(
+        title = json.optString("title"),
+        scene = json.optString("scene"),
+        palette = json.optString("palette"),
+        note = json.optString("note"),
+        score = json.optDouble("score"),
+        inspirationId = json.optString("inspiration_id"),
+        imageUrl = json.optNullableString("image_url"),
+        favoriteId = json.optNullableString("favorite_id"),
+    )
+}
+
+fun parseFavorite(json: JSONObject): FavoriteView {
+    return FavoriteView(
+        favoriteId = json.optString("favorite_id"),
+        ownerId = json.optString("owner_id"),
+        favoriteType = json.optString("favorite_type"),
+        targetId = json.optString("target_id"),
+        snapshotTitle = json.optJSONObject("snapshot")?.optNullableString("title"),
+    )
+}
+
+fun parseFavorites(json: JSONArray): List<FavoriteView> {
+    return List(json.length()) { index -> parseFavorite(json.getJSONObject(index)) }
 }
 
 fun parseAuthResponse(json: JSONObject): AuthResponse {
@@ -429,6 +621,13 @@ private fun JSONObject?.toDoubleMap(): Map<String, Double> {
     return result
 }
 
+private fun JSONObject?.toStringMap(): Map<String, String> {
+    if (this == null) return emptyMap()
+    val result = linkedMapOf<String, String>()
+    keys().forEach { key -> result[key] = opt(key)?.toString() ?: "null" }
+    return result
+}
+
 private fun JSONArray?.toStringList(): List<String> {
     if (this == null) return emptyList()
     return List(length()) { index -> optString(index) }.filter { it.isNotBlank() }
@@ -442,6 +641,15 @@ private fun <T> JSONArray?.toObjectList(parser: (JSONObject) -> T): List<T> {
 private fun JSONObject.optNullableString(name: String): String? {
     if (!has(name) || isNull(name)) return null
     return optString(name).takeIf { it.isNotBlank() }
+}
+
+private fun JSONObject.optNullableInt(name: String): Int? {
+    if (!has(name) || isNull(name)) return null
+    return optInt(name)
+}
+
+private fun JSONObject.putNullable(name: String, value: Any?): JSONObject {
+    return put(name, value ?: JSONObject.NULL)
 }
 
 fun Double.asPercent(): String = String.format(Locale.US, "%.0f%%", this * 100)
