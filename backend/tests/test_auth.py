@@ -310,11 +310,15 @@ def test_logout_without_token_is_idempotent(tmp_path):
 
 def test_wardrobe_items_are_scoped_to_current_user(tmp_path):
     client, verifier = auth_client(tmp_path)
-    first_login = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"}).json()
+    first_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert first_login_response.status_code == 200
+    first_login = first_login_response.json()
     first_token = first_login["session"]["token"]
 
     verifier.profile = profile(sub="google-sub-2", email="second@example.com", name="Second User")
-    second_login = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"}).json()
+    second_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert second_login_response.status_code == 200
+    second_login = second_login_response.json()
     second_token = second_login["session"]["token"]
 
     files = {"photo": ("shirt.jpg", b"fake image", "image/jpeg")}
@@ -327,8 +331,45 @@ def test_wardrobe_items_are_scoped_to_current_user(tmp_path):
     )
     assert create_response.status_code == 201
 
-    first_items = client.get("/api/v1/wardrobe-items", headers={"Authorization": f"Bearer {first_token}"}).json()
-    second_items = client.get("/api/v1/wardrobe-items", headers={"Authorization": f"Bearer {second_token}"}).json()
+    first_items_response = client.get("/api/v1/wardrobe-items", headers={"Authorization": f"Bearer {first_token}"})
+    second_items_response = client.get("/api/v1/wardrobe-items", headers={"Authorization": f"Bearer {second_token}"})
+    assert first_items_response.status_code == 200
+    assert second_items_response.status_code == 200
+    first_items = first_items_response.json()
+    second_items = second_items_response.json()
 
     assert [item["title"] for item in first_items] == ["White shirt"]
     assert second_items == []
+
+
+def test_anonymous_wardrobe_items_only_include_anonymous_items(tmp_path):
+    client, _ = auth_client(tmp_path)
+    login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert login_response.status_code == 200
+    token = login_response.json()["session"]["token"]
+
+    create_user_item_response = client.post(
+        "/api/v1/wardrobe-items",
+        data={"category": "top", "title": "White shirt"},
+        files={"photo": ("shirt.jpg", b"fake image", "image/jpeg")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert create_user_item_response.status_code == 201
+
+    anonymous_items_response = client.get("/api/v1/wardrobe-items")
+    assert anonymous_items_response.status_code == 200
+    anonymous_titles = [item["title"] for item in anonymous_items_response.json()]
+    assert "White shirt" not in anonymous_titles
+
+    create_anonymous_item_response = client.post(
+        "/api/v1/wardrobe-items",
+        data={"category": "accessory", "title": "Black hat"},
+        files={"photo": ("hat.jpg", b"fake image", "image/jpeg")},
+    )
+    assert create_anonymous_item_response.status_code == 201
+
+    anonymous_items_response = client.get("/api/v1/wardrobe-items")
+    assert anonymous_items_response.status_code == 200
+    anonymous_titles = [item["title"] for item in anonymous_items_response.json()]
+    assert "White shirt" not in anonymous_titles
+    assert "Black hat" in anonymous_titles

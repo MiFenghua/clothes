@@ -171,7 +171,9 @@ async def list_wardrobe_items(
     container: Annotated[AppContainer, Depends(container_dependency)],
     user: Annotated[PublicUser | None, Depends(current_user)],
 ) -> list[WardrobeItem]:
-    return container.task_service.list_wardrobe_items(user.user_id if user else None)
+    if user is not None:
+        return container.task_service.list_wardrobe_items(user.user_id)
+    return [item for item in container.task_service.list_wardrobe_items() if item.owner_id is None]
 
 
 @router.post("/api/v1/wardrobe-items", response_model=WardrobeItem, status_code=201)
