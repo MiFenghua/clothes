@@ -8,17 +8,11 @@ import org.junit.Test
 
 class ProductParsingTest {
     @Test
-    fun parseProfileViewMapsUserAndStyleProfile() {
+    fun parseProfileViewMapsNullUserAndStyleProfile() {
         val json = JSONObject(
             """
             {
-              "user": {
-                "user_id": "user-1",
-                "email": "a@example.com",
-                "name": "Ada",
-                "avatar_url": null,
-                "provider": "google"
-              },
+              "user": null,
               "style_profile": {
                 "display_name": "Ada",
                 "height_cm": 168,
@@ -37,7 +31,7 @@ class ProductParsingTest {
 
         val view = parseProfileView(json)
 
-        assertEquals("user-1", view.user?.userId)
+        assertNull(view.user)
         assertEquals("Ada", view.styleProfile.displayName)
         assertEquals(168, view.styleProfile.heightCm)
         assertNull(view.styleProfile.weightKg)
@@ -82,6 +76,7 @@ class ProductParsingTest {
 
         assertEquals(0.88, view.featureSummary.score, 0.0001)
         assertEquals("rec-1", view.recommendations.single().recommendationId)
+        assertEquals("Blue blazer", view.recommendations.first().title)
         assertEquals("https://example.com/rec.png", view.recommendations.single().imageUrl)
         assertEquals("Layer lightly", view.todaySuggestion.title)
         assertEquals("true", view.backendStatus["online"])
