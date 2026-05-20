@@ -171,8 +171,13 @@ def test_profile_update_recomputes_feature_metrics():
     assert metrics["Hair tone"] == "black"
 
 
-def test_home_uses_recent_completed_task(tmp_path):
-    client = product_client(tmp_path)
+def test_home_uses_authenticated_recent_completed_task(tmp_path):
+    client, _ = authenticated_product_client(tmp_path)
+    login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert login_response.status_code == 200
+    token = login_response.json()["session"]["token"]
+    owner_id = login_response.json()["user"]["user_id"]
+
     container = get_container()
     task = container.task_service.create_task(
         StyleTaskRequest(
@@ -180,7 +185,8 @@ def test_home_uses_recent_completed_task(tmp_path):
             photo_object_key="photo.jpg",
             scene=Scene.date,
             budget=Budget(min=300, max=800),
-        )
+        ),
+        owner_id=owner_id,
     )
     container.task_service.repository.complete(
         task.task_id,
@@ -200,13 +206,50 @@ def test_home_uses_recent_completed_task(tmp_path):
         ),
     )
 
-    response = client.get("/api/v1/home")
+    response = client.get("/api/v1/home", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
     first = response.json()["recommendations"][0]
     assert first["source_task_id"] == task.task_id
     assert first["title"] == "Task Backed Look"
     assert first["scene"] == "date"
+
+
+def test_anonymous_home_ignores_anonymous_completed_task_history(tmp_path):
+    client = product_client(tmp_path)
+    container = get_container()
+    task = container.task_service.create_task(
+        StyleTaskRequest(
+            photo_url="/uploads/anonymous-photo.jpg",
+            photo_object_key="anonymous-photo.jpg",
+            scene=Scene.travel,
+            budget=Budget(min=300, max=800),
+        ),
+        owner_id=None,
+    )
+    container.task_service.repository.complete(
+        task.task_id,
+        StyleTaskResult(
+            task_id=task.task_id,
+            status=TaskStatus.succeeded,
+            outfit=OutfitCandidate(
+                candidate_id="outfit_anonymous",
+                title="Anonymous Task Look",
+                items=[],
+                total_price=0,
+                score=0.9,
+                score_breakdown={"overall": 0.9},
+                why_this_works=["anonymous task result"],
+            ),
+        ),
+    )
+
+    response = client.get("/api/v1/home")
+
+    assert response.status_code == 200
+    recommendations = response.json()["recommendations"]
+    assert task.task_id not in {item["source_task_id"] for item in recommendations}
+    assert "Anonymous Task Look" not in {item["title"] for item in recommendations}
 
 
 def test_home_history_is_scoped_to_current_user(tmp_path):
@@ -267,3 +310,37 @@ def test_home_history_is_scoped_to_current_user(tmp_path):
     first_recommendations = first_home_response.json()["recommendations"]
     assert task.task_id in {item["source_task_id"] for item in first_recommendations}
     assert "Private User A Look" in {item["title"] for item in first_recommendations}
+
+
+def test_style_task_read_is_scoped_to_owner(tmp_path):
+    client, verifier = authenticated_product_client(tmp_path)
+    first_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert first_login_response.status_code == 200
+    first_token = first_login_response.json()["session"]["token"]
+    first_user_id = first_login_response.json()["user"]["user_id"]
+
+    verifier.profile = google_profile(sub="google-sub-2", email="second@example.com", name="Second User")
+    second_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert second_login_response.status_code == 200
+    second_token = second_login_response.json()["session"]["token"]
+
+    container = get_container()
+    task = container.task_service.create_task(
+        StyleTaskRequest(
+            photo_url="/uploads/private-task.jpg",
+            photo_object_key="private-task.jpg",
+            scene=Scene.daily,
+            budget=Budget(min=300, max=800),
+        ),
+        owner_id=first_user_id,
+    )
+
+    task_url = f"/api/v1/style-tasks/{task.task_id}"
+    first_response = client.get(task_url, headers={"Authorization": f"Bearer {first_token}"})
+    second_response = client.get(task_url, headers={"Authorization": f"Bearer {second_token}"})
+    anonymous_response = client.get(task_url)
+
+    assert first_response.status_code == 200
+    assert first_response.json()["task_id"] == task.task_id
+    assert second_response.status_code == 404
+    assert anonymous_response.status_code == 404

@@ -112,7 +112,7 @@ async def get_home(
     profile = container.profile_repository.get(owner_id, _display_name(user))
     return build_home_view(
         profile=profile,
-        tasks=container.task_service.recent_completed_tasks(owner_id=owner_id),
+        tasks=[] if owner_id is None else container.task_service.recent_completed_tasks(owner_id=owner_id),
         settings_status={
             "ok": True,
             "search_provider": container.settings.search_provider,
@@ -181,9 +181,13 @@ async def create_style_task(
 
 
 @router.get("/api/v1/style-tasks/{task_id}", response_model=StyleTaskView)
-async def get_style_task(task_id: str, container: Annotated[AppContainer, Depends(container_dependency)]) -> StyleTaskView:
+async def get_style_task(
+    task_id: str,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> StyleTaskView:
     try:
-        return container.task_service.get_task(task_id)
+        return _visible_style_task(container, user, task_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Task not found") from exc
 
@@ -192,9 +196,13 @@ async def get_style_task(task_id: str, container: Annotated[AppContainer, Depend
 async def get_style_task_result(
     task_id: str,
     container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
 ) -> StyleTaskResult:
     try:
-        return container.task_service.get_result(task_id)
+        task = _visible_style_task(container, user, task_id)
+        if task.result is None:
+            raise ValueError("Task result is not ready")
+        return task.result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Task not found") from exc
     except ValueError as exc:
@@ -206,19 +214,28 @@ async def retry_style_task_image(
     task_id: str,
     background_tasks: BackgroundTasks,
     container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
 ) -> StyleTaskView:
     try:
-        task = container.task_service.get_task(task_id)
+        task = _visible_style_task(container, user, task_id)
         if task.result is None or task.result.outfit is None:
             raise HTTPException(status_code=409, detail="Task has no approved outfit to retry")
         background_tasks.add_task(container.task_service.retry_image, task_id)
-        return container.task_service.get_task(task_id)
+        return _visible_style_task(container, user, task_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Task not found") from exc
 
 
 @router.get("/api/v1/style-tasks/{task_id}/trace")
-async def get_style_task_trace(task_id: str, container: Annotated[AppContainer, Depends(container_dependency)]) -> dict:
+async def get_style_task_trace(
+    task_id: str,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> dict:
+    try:
+        _visible_style_task(container, user, task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Task not found") from exc
     return {"task_id": task_id, "events": container.tracer.by_task(task_id)}
 
 
@@ -277,6 +294,13 @@ def _owner_id(user: PublicUser | None) -> str | None:
 
 def _display_name(user: PublicUser | None) -> str:
     return user.name if user else "Style User"
+
+
+def _visible_style_task(container: AppContainer, user: PublicUser | None, task_id: str) -> StyleTaskView:
+    task = container.task_service.get_task(task_id)
+    if task.owner_id is not None and task.owner_id != _owner_id(user):
+        raise KeyError(f"Task not found: {task_id}")
+    return task
 
 
 def _visible_wardrobe_item_ids(container: AppContainer, user: PublicUser | None, item_ids: list[str]) -> list[str]:
