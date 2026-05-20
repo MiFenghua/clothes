@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -30,9 +31,17 @@ class AuthStore:
         self._prune_expired_sessions()
 
     def upsert_google_user(self, profile: GoogleProfile) -> AuthUserRecord:
+        if not profile.email_verified:
+            raise ValueError("Google profile email must be verified")
+
         email = profile.email.strip().lower()
         now = self._now()
-        user = self._find_user_by_google_sub(profile.sub) or self._find_user_by_email(email)
+        user_by_sub = self._find_user_by_google_sub(profile.sub)
+        user_by_email = self._find_user_by_email(email)
+        if user_by_sub is not None and user_by_email is not None and user_by_sub.user_id != user_by_email.user_id:
+            raise ValueError("Google profile email belongs to another user")
+
+        user = user_by_sub or user_by_email
         if user is not None:
             updated = user.model_copy(
                 update={
@@ -62,6 +71,9 @@ class AuthStore:
         return created
 
     def create_session(self, user_id: str) -> AuthSession:
+        if not any(user.user_id == user_id for user in self.users):
+            raise ValueError(f"Unknown auth user: {user_id}")
+
         self._prune_expired_sessions()
         now = self._now()
         expires_at = now + timedelta(days=self.session_max_age_days)
@@ -83,7 +95,7 @@ class AuthStore:
             return None
         self._prune_expired_sessions()
         token_hash = self._hash_token(token)
-        session = next((candidate for candidate in self.sessions if candidate.token_hash == token_hash), None)
+        session = next((candidate for candidate in self.sessions if self._token_hash_matches(candidate, token_hash)), None)
         if session is None:
             return None
         user = next((candidate for candidate in self.users if candidate.user_id == session.user_id), None)
@@ -93,7 +105,7 @@ class AuthStore:
         if not token:
             return
         token_hash = self._hash_token(token)
-        next_sessions = [session for session in self.sessions if session.token_hash != token_hash]
+        next_sessions = [session for session in self.sessions if not self._token_hash_matches(session, token_hash)]
         if len(next_sessions) == len(self.sessions):
             return
         self.sessions = next_sessions
@@ -118,7 +130,13 @@ class AuthStore:
             "users": [user.model_dump(mode="json") for user in self.users],
             "sessions": [session.model_dump(mode="json") for session in self.sessions],
         }
-        self.store_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp_path = self.store_path.with_name(f".{self.store_path.name}.{uuid4().hex}.tmp")
+        try:
+            temp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            temp_path.replace(self.store_path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
 
     def _prune_expired_sessions(self) -> None:
         now = self._now()
@@ -131,6 +149,10 @@ class AuthStore:
     @staticmethod
     def _hash_token(token: str) -> str:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _token_hash_matches(session: AuthSessionRecord, token_hash: str) -> bool:
+        return hmac.compare_digest(session.token_hash, token_hash)
 
     @staticmethod
     def _now() -> datetime:
