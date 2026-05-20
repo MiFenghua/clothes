@@ -163,6 +163,31 @@ def test_favorite_save_is_idempotent_for_owner_type_and_target():
     assert len(repository.list_for_owner("owner-1")) == 1
 
 
+def test_anonymous_favorite_save_is_rejected_and_list_is_empty():
+    repository = FavoriteRepository()
+    create = FavoriteCreate(
+        favorite_type=FavoriteType.inspiration,
+        target_id="inspiration_commute_001",
+    )
+
+    try:
+        repository.save(None, create)
+    except PermissionError as exc:
+        assert str(exc) == "Authentication is required for favorites"
+    else:
+        raise AssertionError("Expected PermissionError for anonymous favorite save")
+
+    assert repository.list_for_owner(None) == []
+    assert repository.list_for_owner(None, FavoriteType.inspiration) == []
+
+    try:
+        repository.delete(None, "favorite_missing")
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("Expected KeyError for anonymous delete of missing favorite")
+
+
 def test_favorite_delete_distinguishes_missing_from_wrong_owner():
     repository = FavoriteRepository()
     favorite = repository.save(
@@ -176,6 +201,14 @@ def test_favorite_delete_distinguishes_missing_from_wrong_owner():
         pass
     else:
         raise AssertionError("Expected PermissionError for another owner's favorite")
+
+    try:
+        repository.delete(None, favorite.favorite_id)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("Expected PermissionError for anonymous favorite delete")
+    assert repository.list_for_owner("owner-1") == [favorite]
 
     try:
         repository.delete("owner-1", "favorite_missing")

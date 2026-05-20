@@ -120,12 +120,16 @@ class FavoriteRepository:
     favorites: dict[str | None, dict[str, FavoriteView]] = field(default_factory=dict)
 
     def list_for_owner(self, owner_id: str | None, favorite_type: FavoriteType | None = None) -> list[FavoriteView]:
+        if owner_id is None:
+            return []
         owner_favorites = list(self.favorites.get(owner_id, {}).values())
         if favorite_type is None:
             return owner_favorites
         return [favorite for favorite in owner_favorites if favorite.favorite_type == favorite_type]
 
     def save(self, owner_id: str | None, create: FavoriteCreate) -> FavoriteView:
+        if owner_id is None:
+            raise PermissionError("Authentication is required for favorites")
         owner_favorites = self.favorites.setdefault(owner_id, {})
         for favorite in owner_favorites.values():
             if favorite.favorite_type == create.favorite_type and favorite.target_id == create.target_id:
@@ -143,6 +147,10 @@ class FavoriteRepository:
         return favorite
 
     def delete(self, owner_id: str | None, favorite_id: str) -> None:
+        if owner_id is None:
+            if any(favorite_id in owner_favorites for owner_favorites in self.favorites.values()):
+                raise PermissionError("Authentication is required for favorites")
+            raise KeyError(f"Favorite not found: {favorite_id}")
         for stored_owner_id, owner_favorites in self.favorites.items():
             if favorite_id not in owner_favorites:
                 continue
