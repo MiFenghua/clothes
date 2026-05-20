@@ -140,6 +140,133 @@ def test_inspirations_can_filter_by_scene(tmp_path):
     assert {item["scene"] for item in body["items"]} == {"commute"}
 
 
+def test_favorite_routes_require_authentication(tmp_path):
+    client = product_client(tmp_path)
+
+    list_response = client.get("/api/v1/favorites?type=inspiration")
+    create_response = client.post(
+        "/api/v1/favorites",
+        json={
+            "favorite_type": "inspiration",
+            "target_id": "inspiration_commute_001",
+            "snapshot": {"title": "Look"},
+        },
+    )
+    delete_response = client.delete("/api/v1/favorites/favorite_missing")
+
+    assert list_response.status_code == 401
+    assert create_response.status_code == 401
+    assert delete_response.status_code == 401
+
+
+def test_favorite_routes_round_trip_for_authenticated_user(tmp_path):
+    client, _ = authenticated_product_client(tmp_path)
+    login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert login_response.status_code == 200
+    token = login_response.json()["session"]["token"]
+    owner_id = login_response.json()["user"]["user_id"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/api/v1/favorites",
+        json={
+            "favorite_type": "inspiration",
+            "target_id": "inspiration_commute_001",
+            "snapshot": {"title": "Soft Tailored Commute"},
+        },
+        headers=headers,
+    )
+
+    assert create_response.status_code == 200
+    favorite = create_response.json()
+    assert favorite["favorite_id"]
+    assert favorite["owner_id"] == owner_id
+    assert favorite["target_id"] == "inspiration_commute_001"
+
+    list_response = client.get("/api/v1/favorites?type=inspiration", headers=headers)
+    assert list_response.status_code == 200
+    favorites = list_response.json()
+    assert len(favorites) == 1
+    assert favorites[0]["favorite_id"] == favorite["favorite_id"]
+
+    update_response = client.post(
+        "/api/v1/favorites",
+        json={
+            "favorite_type": "inspiration",
+            "target_id": "inspiration_commute_001",
+            "snapshot": {"title": "Updated Commute"},
+        },
+        headers=headers,
+    )
+    assert update_response.status_code == 200
+    updated_favorite = update_response.json()
+    assert updated_favorite["favorite_id"] == favorite["favorite_id"]
+    assert updated_favorite["snapshot"] == {"title": "Updated Commute"}
+
+    inspirations_response = client.get("/api/v1/inspirations?scene=commute", headers=headers)
+    assert inspirations_response.status_code == 200
+    inspirations_by_id = {item["inspiration_id"]: item for item in inspirations_response.json()["items"]}
+    assert inspirations_by_id["inspiration_commute_001"]["favorite_id"] == favorite["favorite_id"]
+
+    delete_response = client.delete(f"/api/v1/favorites/{favorite['favorite_id']}", headers=headers)
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"ok": True}
+
+    empty_response = client.get("/api/v1/favorites?type=inspiration", headers=headers)
+    assert empty_response.status_code == 200
+    assert empty_response.json() == []
+
+
+def test_favorite_routes_are_scoped_between_users(tmp_path):
+    client, verifier = authenticated_product_client(tmp_path)
+    first_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert first_login_response.status_code == 200
+    first_token = first_login_response.json()["session"]["token"]
+    first_headers = {"Authorization": f"Bearer {first_token}"}
+
+    create_response = client.post(
+        "/api/v1/favorites",
+        json={
+            "favorite_type": "inspiration",
+            "target_id": "inspiration_commute_001",
+            "snapshot": {"title": "Soft Tailored Commute"},
+        },
+        headers=first_headers,
+    )
+    assert create_response.status_code == 200
+    favorite_id = create_response.json()["favorite_id"]
+
+    verifier.profile = google_profile(sub="google-sub-2", email="second@example.com", name="Second User")
+    second_login_response = client.post("/api/v1/auth/google", json={"id_token": "header.payload.signature"})
+    assert second_login_response.status_code == 200
+    second_token = second_login_response.json()["session"]["token"]
+    second_headers = {"Authorization": f"Bearer {second_token}"}
+
+    second_list_response = client.get("/api/v1/favorites?type=inspiration", headers=second_headers)
+    assert second_list_response.status_code == 200
+    assert second_list_response.json() == []
+
+    second_inspirations_response = client.get("/api/v1/inspirations?scene=commute", headers=second_headers)
+    assert second_inspirations_response.status_code == 200
+    inspirations_by_id = {item["inspiration_id"]: item for item in second_inspirations_response.json()["items"]}
+    assert inspirations_by_id["inspiration_commute_001"]["favorite_id"] is None
+
+    wrong_owner_delete_response = client.delete(f"/api/v1/favorites/{favorite_id}", headers=second_headers)
+    assert wrong_owner_delete_response.status_code == 404
+
+    first_list_response = client.get("/api/v1/favorites?type=inspiration", headers=first_headers)
+    assert first_list_response.status_code == 200
+    assert [favorite["favorite_id"] for favorite in first_list_response.json()] == [favorite_id]
+
+
+def test_favorite_routes_reject_invalid_bearer_like_anonymous(tmp_path):
+    client = product_client(tmp_path)
+
+    response = client.get("/api/v1/favorites?type=inspiration", headers={"Authorization": "Bearer missing-token"})
+
+    assert response.status_code == 401
+
+
 def test_favorite_save_is_idempotent_for_owner_type_and_target():
     repository = FavoriteRepository()
     create = FavoriteCreate(

@@ -9,7 +9,16 @@ from app.providers.google_auth import GoogleAuthNotConfiguredError, GoogleTokenV
 from app.providers.product_content import build_home_view
 from app.schemas.auth import AuthResponse, GoogleLoginRequest, PublicUser
 from app.schemas.domain import Budget, Marketplace, ProductCategory, Scene, StylePreferences, StyleTaskRequest, WardrobeItem
-from app.schemas.product import FavoriteType, HomeView, InspirationPage, ProfileView, StyleProfileUpdate, StyleProfileView
+from app.schemas.product import (
+    FavoriteCreate,
+    FavoriteType,
+    FavoriteView,
+    HomeView,
+    InspirationPage,
+    ProfileView,
+    StyleProfileUpdate,
+    StyleProfileView,
+)
 from app.schemas.results import StyleTaskResult, StyleTaskView
 from app.services.container import AppContainer, get_container
 
@@ -34,6 +43,12 @@ def current_user(
     authorization: Annotated[str | None, Header()] = None,
 ) -> PublicUser | None:
     return container.auth_store.get_user_by_token(bearer_token(authorization))
+
+
+def _require_user(user: PublicUser | None) -> PublicUser:
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    return user
 
 
 @router.get("/health")
@@ -133,6 +148,40 @@ async def list_inspirations(
     favorites = container.favorite_repository.list_for_owner(_owner_id(user), FavoriteType.inspiration)
     favorite_ids_by_target = {favorite.target_id: favorite.favorite_id for favorite in favorites}
     return container.inspiration_repository.list(scene=scene, favorite_ids_by_target=favorite_ids_by_target)
+
+
+@router.get("/api/v1/favorites", response_model=list[FavoriteView])
+async def list_favorites(
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+    type: FavoriteType | None = None,
+) -> list[FavoriteView]:
+    auth_user = _require_user(user)
+    return container.favorite_repository.list_for_owner(auth_user.user_id, type)
+
+
+@router.post("/api/v1/favorites", response_model=FavoriteView)
+async def save_favorite(
+    payload: FavoriteCreate,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> FavoriteView:
+    auth_user = _require_user(user)
+    return container.favorite_repository.save(auth_user.user_id, payload)
+
+
+@router.delete("/api/v1/favorites/{favorite_id}")
+async def delete_favorite(
+    favorite_id: str,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> dict[str, bool]:
+    auth_user = _require_user(user)
+    try:
+        container.favorite_repository.delete(auth_user.user_id, favorite_id)
+    except (KeyError, PermissionError) as exc:
+        raise HTTPException(status_code=404, detail="Favorite not found") from exc
+    return {"ok": True}
 
 
 @router.post("/api/v1/style-tasks", response_model=StyleTaskView, status_code=201)
