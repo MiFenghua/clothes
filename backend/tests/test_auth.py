@@ -6,9 +6,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.providers.auth import AuthStore, GoogleProfile
-from app.providers.google_auth import GoogleIdTokenVerifier, GoogleTokenVerificationError
 from app.main import create_app
+from app.providers import google_auth
+from app.providers.auth import AuthStore, GoogleProfile
+from app.providers.google_auth import (
+    GoogleAuthNotConfiguredError,
+    GoogleIdTokenVerifier,
+    GoogleOAuthIdTokenVerifier,
+    GoogleTokenVerificationError,
+)
 from app.services.container import get_container
 
 
@@ -146,6 +152,68 @@ def test_auth_store_saves_with_atomic_replace(tmp_path, monkeypatch):
     assert stored_user.user_id == user.user_id
 
 
+def test_google_oauth_verifier_requires_client_id_without_calling_google(monkeypatch):
+    called = False
+
+    def verify_oauth2_token(*args: object) -> dict:
+        nonlocal called
+        called = True
+        return {}
+
+    monkeypatch.setattr(google_auth.id_token, "verify_oauth2_token", verify_oauth2_token)
+
+    with pytest.raises(GoogleAuthNotConfiguredError, match="client id"):
+        GoogleOAuthIdTokenVerifier(None).verify("fake-token")
+
+    assert called is False
+
+
+def test_google_oauth_verifier_maps_google_value_error(monkeypatch):
+    def verify_oauth2_token(*args: object) -> dict:
+        raise ValueError("bad token")
+
+    monkeypatch.setattr(google_auth.id_token, "verify_oauth2_token", verify_oauth2_token)
+
+    with pytest.raises(GoogleTokenVerificationError, match="Invalid Google ID token"):
+        GoogleOAuthIdTokenVerifier("client-id").verify("fake-token")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"email": "style.user@example.com", "email_verified": True},
+        {"sub": "google-sub-1", "email_verified": True},
+    ],
+)
+def test_google_oauth_verifier_rejects_missing_subject_or_email(monkeypatch, payload):
+    def verify_oauth2_token(*args: object) -> dict:
+        return payload
+
+    monkeypatch.setattr(google_auth.id_token, "verify_oauth2_token", verify_oauth2_token)
+
+    with pytest.raises(GoogleTokenVerificationError, match="Invalid Google ID token"):
+        GoogleOAuthIdTokenVerifier("client-id").verify("fake-token")
+
+
+def test_google_oauth_verifier_accepts_string_true_email_verified(monkeypatch):
+    def verify_oauth2_token(*args: object) -> dict:
+        return {
+            "sub": "google-sub-1",
+            "email": "style.user@example.com",
+            "email_verified": "true",
+            "name": "Style User",
+            "picture": "https://example.com/avatar.png",
+        }
+
+    monkeypatch.setattr(google_auth.id_token, "verify_oauth2_token", verify_oauth2_token)
+
+    profile = GoogleOAuthIdTokenVerifier("client-id").verify("fake-token")
+
+    assert profile.email_verified is True
+    assert profile.sub == "google-sub-1"
+    assert profile.email == "style.user@example.com"
+
+
 def test_google_auth_route_returns_user_and_session_for_valid_profile(tmp_path):
     client, verifier = auth_client(tmp_path)
     verifier.profile = profile()
@@ -180,6 +248,21 @@ def test_google_auth_route_rejects_invalid_google_token(tmp_path):
     assert response.json() == {"detail": "Invalid Google ID token"}
 
 
+def test_google_auth_route_returns_conflict_for_email_takeover(tmp_path):
+    client, verifier = auth_client(tmp_path)
+
+    verifier.profile = profile(sub="sub-a", email="first@example.com")
+    assert client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"}).status_code == 200
+    verifier.profile = profile(sub="sub-b", email="second@example.com")
+    assert client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"}).status_code == 200
+
+    verifier.profile = profile(sub="sub-a", email="second@example.com")
+    response = client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"})
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Google profile email belongs to another user"}
+
+
 def test_auth_me_returns_current_user_from_bearer_token(tmp_path):
     client, _ = auth_client(tmp_path)
     login = client.post("/api/v1/auth/google", json={"id_token": "fake-google-id-token-value"})
@@ -189,6 +272,17 @@ def test_auth_me_returns_current_user_from_bearer_token(tmp_path):
 
     assert response.status_code == 200
     assert response.json()["user"]["email"] == "style.user@example.com"
+
+
+@pytest.mark.parametrize("authorization", [None, "", "Basic abc", "Bearer"])
+def test_auth_me_returns_no_user_for_missing_or_malformed_authorization(tmp_path, authorization):
+    client, _ = auth_client(tmp_path)
+    headers = {"Authorization": authorization} if authorization is not None else {}
+
+    response = client.get("/api/v1/auth/me", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"user": None}
 
 
 def test_logout_invalidates_bearer_session(tmp_path):
@@ -203,3 +297,12 @@ def test_logout_invalidates_bearer_session(tmp_path):
     assert response.json() == {"ok": True}
     assert me.status_code == 200
     assert me.json() == {"user": None}
+
+
+def test_logout_without_token_is_idempotent(tmp_path):
+    client, _ = auth_client(tmp_path)
+
+    response = client.post("/api/v1/auth/logout")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
