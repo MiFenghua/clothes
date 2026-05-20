@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI 搭配师</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">AI Styling Agent</p>
+          <h1>AI 搭配师</h1>
+          <p class="subtitle">以推荐合理性和本人真实感为核心的试穿工作台</p>
+        </div>
+        <a class="health-pill" href="/health" target="_blank" rel="noreferrer">API</a>
+      </header>
+
+      <nav class="tabs" aria-label="主导航">
+        <button class="tab is-active" type="button" data-view="style">搭配</button>
+        <button class="tab" type="button" data-view="wardrobe">衣橱</button>
+        <button class="tab" type="button" data-view="trace">质检</button>
+      </nav>
+
+      <section class="view is-active" id="styleView">
+        <form class="composer" id="styleForm">
+          <section class="photo-panel">
+            <label class="photo-drop" for="photoInput">
+              <input id="photoInput" name="photo" type="file" accept="image/*" required />
+              <img id="photoPreview" alt="" />
+              <span class="drop-title">选择全身照</span>
+              <span class="drop-copy">清晰、无遮挡、完整人物。系统会优先保留本人脸部和体态。</span>
+            </label>
+          </section>
+
+          <section class="control-panel">
+            <div class="section-title">
+              <span>推荐约束</span>
+              <strong id="qualityMode">质量优先</strong>
+            </div>
+
+            <div class="field">
+              <label for="scene">场景</label>
+              <select id="scene" name="scene">
+                <option value="daily">日常出街</option>
+                <option value="commute">通勤</option>
+                <option value="date">约会</option>
+                <option value="travel">旅行</option>
+                <option value="party">聚会</option>
+              </select>
+            </div>
+
+            <div class="split">
+              <div class="field">
+                <label for="budgetMin">预算下限</label>
+                <input id="budgetMin" name="budget_min" type="number" min="0" value="300" />
+              </div>
+              <div class="field">
+                <label for="budgetMax">预算上限</label>
+                <input id="budgetMax" name="budget_max" type="number" min="0" value="900" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="likedStyle">喜欢风格</label>
+              <input id="likedStyle" name="liked_style" type="text" value="干净,显比例" placeholder="如 干净,轻熟,温柔" />
+            </div>
+            <div class="field">
+              <label for="avoid">避雷项</label>
+              <input id="avoid" name="avoid" type="text" placeholder="如 荧光色,过度宽松" />
+            </div>
+
+            <details class="advanced">
+              <summary>高级信息</summary>
+              <div class="split">
+                <div class="field">
+                  <label for="heightCm">身高</label>
+                  <input id="heightCm" name="height_cm" type="number" min="100" max="230" placeholder="165" />
+                </div>
+                <div class="field">
+                  <label for="usualSize">常穿尺码</label>
+                  <input id="usualSize" name="usual_size" type="text" placeholder="M / 160" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="marketplaces">商品市场</label>
+                <input id="marketplaces" name="marketplaces" type="text" value="taobao,tmall,amazon" />
+              </div>
+            </details>
+
+            <button class="primary" id="submitButton" type="submit">生成高可信穿搭</button>
+          </section>
+        </form>
+
+        <section class="progress-panel" id="progressPanel" hidden>
+          <div class="progress-head">
+            <div>
+              <strong id="taskMessage">任务已创建</strong>
+              <p id="taskStatus">created</p>
+            </div>
+            <span id="taskProgress">0%</span>
+          </div>
+          <div class="meter"><span id="meterFill"></span></div>
+          <ol class="status-list" id="statusList"></ol>
+        </section>
+
+        <section class="result-panel" id="resultPanel" hidden></section>
+      </section>
+
+      <section class="view" id="wardrobeView">
+        <form class="wardrobe-form" id="wardrobeForm">
+          <div class="section-title">
+            <span>历史衣橱</span>
+            <strong>自有单品</strong>
+          </div>
+          <div class="field">
+            <label for="wardrobePhoto">单品图片</label>
+            <input id="wardrobePhoto" name="photo" type="file" accept="image/*" required />
+          </div>
+          <div class="split">
+            <div class="field">
+              <label for="wardrobeCategory">品类</label>
+              <select id="wardrobeCategory" name="category">
+                <option value="top">上衣</option>
+                <option value="bottom">下装</option>
+                <option value="dress">连衣裙</option>
+                <option value="outerwear">外套</option>
+                <option value="shoes">鞋履</option>
+                <option value="bag">包</option>
+                <option value="accessory">配饰</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="wardrobeTitle">名称</label>
+              <input id="wardrobeTitle" name="title" type="text" value="我的基础单品" required />
+            </div>
+          </div>
+          <div class="field">
+            <label for="wardrobeTags">标签</label>
+            <input id="wardrobeTags" name="style_tags" type="text" placeholder="干净,通勤,显比例" />
+          </div>
+          <button class="secondary" type="submit">加入衣橱</button>
+        </form>
+        <section class="wardrobe-list" id="wardrobeList"></section>
+      </section>
+
+      <section class="view" id="traceView">
+        <section class="trace-panel">
+          <div class="section-title">
+            <span>质量追踪</span>
+            <strong id="traceTaskId">暂无任务</strong>
+          </div>
+          <div class="trace-list" id="traceList">
+            <div class="empty">生成一次穿搭后，这里会展示每个 Agent 节点的决策和质检事件。</div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <template id="scoreTemplate">
+      <article class="score-card">
+        <span class="score-label"></span>
+        <strong class="score-value"></strong>
+      </article>
+    </template>
+
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>
