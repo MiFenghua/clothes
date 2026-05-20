@@ -28,6 +28,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'auth_sessions_user_id_fkey'
+      AND conrelid = 'auth_sessions'::regclass
   ) THEN
     ALTER TABLE auth_sessions
       ADD CONSTRAINT auth_sessions_user_id_fkey
@@ -60,10 +61,11 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'style_tasks_user_id_fkey'
+      AND conrelid = 'style_tasks'::regclass
   ) THEN
     ALTER TABLE style_tasks
       ADD CONSTRAINT style_tasks_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE SET NULL;
+      FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE SET NULL NOT VALID;
   END IF;
 END $$;
 
@@ -135,7 +137,7 @@ CREATE TABLE IF NOT EXISTS saved_looks (
   look_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   source_task_id TEXT REFERENCES style_tasks(task_id) ON DELETE SET NULL,
-  outfit JSONB NOT NULL,
+  outfit JSONB,
   recommendation_report JSONB NOT NULL,
   try_on_image_url TEXT,
   image_quality_report JSONB,
@@ -151,10 +153,11 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'saved_looks_user_id_fkey'
+      AND conrelid = 'saved_looks'::regclass
   ) THEN
     ALTER TABLE saved_looks
       ADD CONSTRAINT saved_looks_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE CASCADE;
+      FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE CASCADE NOT VALID;
   END IF;
 END $$;
 
