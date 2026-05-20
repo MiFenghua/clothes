@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">clozAi</string>
     <string name="api_base_url">http://10.0.2.2:8000</string>
+    <string name="google_web_client_id">replace-with-google-web-client-id.apps.googleusercontent.com</string>
 </resources>

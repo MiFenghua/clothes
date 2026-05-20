@@ -40,14 +40,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             ClozAiTheme {
                 val viewModel: StyleViewModel = viewModel()
-                ClozAiApp(viewModel)
+                val googleAuthClient = remember { GoogleAuthClient(this@MainActivity) }
+                ClozAiApp(viewModel, googleAuthClient)
             }
         }
     }
 }
 
 @Composable
-fun ClozAiApp(viewModel: StyleViewModel) {
+fun ClozAiApp(viewModel: StyleViewModel, googleAuthClient: GoogleAuthClient) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(state.notice) {

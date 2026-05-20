@@ -12,12 +12,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class StyleViewModel(application: Application) : AndroidViewModel(application) {
-    private val api = StyleApi(application, application.getString(R.string.api_base_url))
+    private val authSessionStore = AuthSessionStore(application)
+    private val api = StyleApi(application, application.getString(R.string.api_base_url), authSessionStore)
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState
     private var pollingJob: Job? = null
 
     init {
+        _uiState.update { it.copy(currentUser = authSessionStore.user()) }
+        refreshCurrentUser()
         refreshBackendStatus()
     }
 
@@ -95,6 +98,53 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
 
     fun completeLocalLogin() {
         _uiState.update { it.copy(route = AppRoute.StyleGoal, previousRoute = AppRoute.Login, notice = null) }
+    }
+
+    fun signInWithGoogle(googleAuthClient: GoogleAuthClient) {
+        if (_uiState.value.isSigningIn) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSigningIn = true, notice = null) }
+            when (val googleResult = googleAuthClient.signIn()) {
+                GoogleSignInResult.Cancelled -> {
+                    _uiState.update { it.copy(isSigningIn = false, notice = "已取消 Google 登录") }
+                }
+                is GoogleSignInResult.Failure -> {
+                    _uiState.update { it.copy(isSigningIn = false, notice = googleResult.message) }
+                }
+                is GoogleSignInResult.Success -> {
+                    try {
+                        val auth = api.loginWithGoogle(googleResult.idToken)
+                        authSessionStore.save(auth)
+                        _uiState.update {
+                            it.copy(
+                                isSigningIn = false,
+                                currentUser = auth.user,
+                                route = AppRoute.StyleGoal,
+                                previousRoute = AppRoute.Login,
+                                notice = null,
+                            )
+                        }
+                    } catch (error: Exception) {
+                        _uiState.update {
+                            it.copy(
+                                isSigningIn = false,
+                                notice = error.message ?: "Google 登录失败",
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            runCatching { api.logout() }
+            authSessionStore.clear()
+            _uiState.update {
+                UiState(route = AppRoute.Login, previousRoute = AppRoute.Splash, backendOnline = it.backendOnline)
+            }
+        }
     }
 
     fun openFeatureAnalysis() {
@@ -269,6 +319,17 @@ class StyleViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val online = api.health()
             _uiState.update { it.copy(backendOnline = online) }
+        }
+    }
+
+    private fun refreshCurrentUser() {
+        if (authSessionStore.token() == null) return
+        viewModelScope.launch {
+            val user = runCatching { api.currentUser() }.getOrNull()
+            if (user == null) {
+                authSessionStore.clear()
+            }
+            _uiState.update { it.copy(currentUser = user) }
         }
     }
 
