@@ -36,6 +36,16 @@ STYLE_BACKEND_IMAGE_CANDIDATES_PER_ATTEMPT=3
 
 未配置 Ark key 时会回退到 local provider，便于本地跑通 App 流程。
 
+Android Google 登录配置：
+
+```env
+STYLE_BACKEND_GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+STYLE_BACKEND_AUTH_STORE_PATH=backend/storage/auth-store.json
+STYLE_BACKEND_AUTH_SESSION_MAX_AGE_DAYS=30
+```
+
+Android 端使用 Google Credential Manager 获取 ID token，再提交给 Python backend 的 `/api/v1/auth/google` 换取 App session。`STYLE_BACKEND_GOOGLE_CLIENT_ID` 必须和 Android 端 `google_web_client_id` 使用同一个 Web Client ID。
+
 ## Node Demo 后端启动
 
 ```bash
@@ -104,6 +114,8 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 然后用 Android Studio 打开 `android/` 目录运行 `app`。真机调试需要把 `android/app/src/main/res/values/strings.xml` 里的 `api_base_url` 改成电脑局域网 IP 或线上 HTTPS 地址。
+
+Google 登录还需要把同一个 Web Client ID 写入 `android/app/src/main/res/values/strings.xml` 的 `google_web_client_id`。Google Cloud Console 中需要创建 Android OAuth Client，并加入调试/发布证书 SHA 指纹；后端校验 audience 时使用上面的 Web Client ID。
 
 ## Amazon 搜索登录
 
