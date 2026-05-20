@@ -50,8 +50,10 @@ class PostgresAuthStore:
         email = profile.email.strip().lower()
         now = self._now()
         with self.database.connect() as conn:
-            user_by_sub = self._find_user_by_google_sub(conn, profile.sub)
-            user_by_email = self._find_user_by_email(conn, email)
+            # Serialize auth user linking so google_sub/email ownership is checked and changed atomically.
+            conn.execute("LOCK TABLE auth_users IN SHARE ROW EXCLUSIVE MODE")
+            user_by_sub = conn.execute("SELECT * FROM auth_users WHERE google_sub = %s", (profile.sub,)).fetchone()
+            user_by_email = conn.execute("SELECT * FROM auth_users WHERE email = %s", (email,)).fetchone()
             if user_by_sub is not None and user_by_email is not None and user_by_sub["user_id"] != user_by_email["user_id"]:
                 raise ValueError("Google profile email belongs to another user")
 
@@ -85,6 +87,11 @@ class PostgresAuthStore:
                 """
                 INSERT INTO auth_users (user_id, google_sub, email, name, avatar_url, provider, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, 'google', %s, %s)
+                ON CONFLICT (google_sub) DO UPDATE
+                SET email = EXCLUDED.email,
+                    name = COALESCE(EXCLUDED.name, auth_users.name),
+                    avatar_url = COALESCE(EXCLUDED.avatar_url, auth_users.avatar_url),
+                    updated_at = EXCLUDED.updated_at
                 RETURNING *
                 """,
                 (
@@ -145,14 +152,6 @@ class PostgresAuthStore:
     def _prune_expired_sessions(self) -> None:
         with self.database.connect() as conn:
             conn.execute("DELETE FROM auth_sessions WHERE expires_at <= %s", (self._now(),))
-
-    @staticmethod
-    def _find_user_by_google_sub(conn: psycopg.Connection[dict[str, Any]], google_sub: str) -> dict[str, Any] | None:
-        return conn.execute("SELECT * FROM auth_users WHERE google_sub = %s", (google_sub,)).fetchone()
-
-    @staticmethod
-    def _find_user_by_email(conn: psycopg.Connection[dict[str, Any]], email: str) -> dict[str, Any] | None:
-        return conn.execute("SELECT * FROM auth_users WHERE email = %s", (email,)).fetchone()
 
     @staticmethod
     def _hash_token(token: str) -> str:
@@ -526,26 +525,14 @@ class PostgresFavoritesRepository:
             raise ValueError("Task has no completed look to save")
 
         with self.database.connect() as conn:
-            existing = conn.execute(
-                """
-                SELECT *
-                FROM saved_looks
-                WHERE user_id = %s
-                  AND source_task_id IS NOT DISTINCT FROM %s
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (user_id, task.task_id),
-            ).fetchone()
-            if existing is not None:
-                return self._saved_look(existing)
-
             row = conn.execute(
                 """
                 INSERT INTO saved_looks (
                     look_id, user_id, source_task_id, outfit, recommendation_report, try_on_image_url, image_quality_report
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, source_task_id) WHERE source_task_id IS NOT NULL DO UPDATE
+                SET source_task_id = EXCLUDED.source_task_id
                 RETURNING *
                 """,
                 (

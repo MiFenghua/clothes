@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import os
 from pathlib import Path
 
@@ -23,10 +24,25 @@ from app.schemas.results import StyleTaskResult
 
 
 POSTGRES_DSN = os.getenv("STYLE_BACKEND_TEST_POSTGRES_DSN")
-pytestmark = pytest.mark.skipif(
-    not POSTGRES_DSN,
-    reason="STYLE_BACKEND_TEST_POSTGRES_DSN is not set",
-)
+
+
+def test_postgres_auth_upsert_uses_conflict_handling():
+    from app.providers.postgres import PostgresAuthStore
+
+    source = inspect.getsource(PostgresAuthStore.upsert_google_user)
+
+    assert "ON CONFLICT" in source
+    assert "_find_user_by_google_sub" not in source
+    assert "_find_user_by_email" not in source
+
+
+def test_postgres_saved_look_uses_conflict_handling():
+    from app.providers.postgres import PostgresFavoritesRepository
+
+    source = inspect.getsource(PostgresFavoritesRepository.save_look)
+
+    assert "ON CONFLICT" in source
+    assert "SELECT *\n                FROM saved_looks" not in source
 
 
 def apply_migration_and_reset(dsn: str) -> None:
