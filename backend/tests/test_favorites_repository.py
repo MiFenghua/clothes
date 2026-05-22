@@ -177,6 +177,28 @@ def test_saved_looks_are_idempotent_and_scoped_by_user():
     assert first.try_on_image_url == "/try-on/task-1.jpg"
 
 
+def test_task_service_save_look_rejects_failed_status_even_with_outfit_and_report():
+    task_repository = InMemoryTaskRepository()
+    favorites_repository = InMemoryFavoritesRepository()
+    service = task_service(task_repository, favorites_repository)
+    task = task_repository.create("task-1", task_request(), user_id="user-1")
+    task_repository.complete(
+        task.task_id,
+        StyleTaskResult(
+            task_id=task.task_id,
+            status=TaskStatus.failed,
+            outfit=outfit_candidate(),
+            try_on_image_url="/try-on/task-1.jpg",
+            recommendation_report=recommendation_report(),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="Task has no completed look to save"):
+        service.save_look("user-1", task.task_id)
+
+    assert favorites_repository.list_looks("user-1") == []
+
+
 def test_saved_look_schema_defaults_source_task_and_outfit():
     saved = SavedLook(
         look_id="look-1",

@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Response, UploadFile
 
 from app.providers.google_auth import GoogleAuthNotConfiguredError, GoogleTokenVerificationError
 from app.providers.product_content import build_home_view
 from app.schemas.auth import AuthResponse, GoogleLoginRequest, PublicUser
 from app.schemas.domain import Budget, Marketplace, ProductCategory, Scene, StylePreferences, StyleTaskRequest, WardrobeItem
+from app.schemas.favorites import FavoriteProduct, FavoriteProductCreate, SavedLook
 from app.schemas.product import (
     FavoriteCreate,
     FavoriteType,
@@ -205,6 +206,61 @@ async def delete_favorite(
     return {"ok": True}
 
 
+@router.get("/api/v1/favorite-products", response_model=list[FavoriteProduct])
+async def list_favorite_products(
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> list[FavoriteProduct]:
+    auth_user = _require_user(user)
+    return container.task_service.list_favorite_products(auth_user.user_id)
+
+
+@router.post("/api/v1/favorite-products", response_model=FavoriteProduct)
+async def save_favorite_product(
+    payload: FavoriteProductCreate,
+    response: Response,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> FavoriteProduct:
+    auth_user = _require_user(user)
+    if payload.source_task_id is not None:
+        try:
+            _visible_style_task(container, user, payload.source_task_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Task not found") from exc
+    existing = {
+        (favorite.product_id, favorite.marketplace)
+        for favorite in container.task_service.list_favorite_products(auth_user.user_id)
+    }
+    try:
+        favorite = container.task_service.save_favorite_product(auth_user.user_id, payload)
+    except PermissionError as exc:
+        raise HTTPException(status_code=404, detail="Task not found") from exc
+    response.status_code = 200 if (favorite.product_id, favorite.marketplace) in existing else 201
+    return favorite
+
+
+@router.delete("/api/v1/favorite-products/{favorite_id}")
+async def delete_favorite_product(
+    favorite_id: str,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> dict[str, bool]:
+    auth_user = _require_user(user)
+    if not container.task_service.delete_favorite_product(auth_user.user_id, favorite_id):
+        raise HTTPException(status_code=404, detail="Favorite product not found")
+    return {"ok": True}
+
+
+@router.get("/api/v1/saved-looks", response_model=list[SavedLook])
+async def list_saved_looks(
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> list[SavedLook]:
+    auth_user = _require_user(user)
+    return container.task_service.list_saved_looks(auth_user.user_id)
+
+
 @router.post("/api/v1/style-tasks", response_model=StyleTaskView, status_code=201)
 async def create_style_task(
     background_tasks: BackgroundTasks,
@@ -309,6 +365,21 @@ async def get_style_task_trace(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Task not found") from exc
     return {"task_id": task_id, "events": container.tracer.by_task(task_id)}
+
+
+@router.post("/api/v1/style-tasks/{task_id}/save-look", response_model=SavedLook)
+async def save_style_task_look(
+    task_id: str,
+    container: Annotated[AppContainer, Depends(container_dependency)],
+    user: Annotated[PublicUser | None, Depends(current_user)],
+) -> SavedLook:
+    auth_user = _require_user(user)
+    try:
+        return container.task_service.save_look(auth_user.user_id, task_id)
+    except (KeyError, PermissionError) as exc:
+        raise HTTPException(status_code=404, detail="Task not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/api/v1/wardrobe-items", response_model=list[WardrobeItem])

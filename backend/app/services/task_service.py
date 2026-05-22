@@ -117,7 +117,12 @@ class TaskService:
         task = self.repository.get(task_id)
         if self.repository.owner_id(task_id) != user_id:
             raise PermissionError("Task not found")
-        if task.result is None or task.result.outfit is None or task.result.recommendation_report is None:
+        if (
+            task.status not in {TaskStatus.succeeded, TaskStatus.partial_succeeded}
+            or task.result is None
+            or task.result.outfit is None
+            or task.result.recommendation_report is None
+        ):
             raise ValueError("Task has no completed look to save")
         return self.favorites_repository.save_look(user_id, task)
 
