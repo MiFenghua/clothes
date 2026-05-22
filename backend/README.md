@@ -37,6 +37,29 @@ photo/image providers so the Android app and backend tests can still run. Browse
 search uses Playwright and only treats real marketplace detail pages with usable
 product images as high-trust product data.
 
+## PostgreSQL Persistence
+
+Set `STYLE_BACKEND_POSTGRES_DSN` to switch the backend from local JSON/in-memory
+stores to PostgreSQL-backed auth, style task, wardrobe, favorite product, saved
+look, and trace repositories:
+
+```env
+STYLE_BACKEND_POSTGRES_DSN=postgresql://style:password@localhost:5432/style
+```
+
+Run the migration before starting the API. The migration enables `pgvector` and
+creates tables for user profiles and sessions, style task request/result history,
+task trace events, wardrobe items, product snapshots, favorite products, and saved
+looks:
+
+```bash
+psql "$STYLE_BACKEND_POSTGRES_DSN" -f migrations/001_initial.sql
+```
+
+PostgreSQL integration tests are opt-in. Set `STYLE_BACKEND_TEST_POSTGRES_DSN`
+to a disposable database and run `python -m pytest tests/test_postgres_persistence.py`.
+Those tests are skipped when the variable is not set.
+
 ## Local Development
 
 ```bash
