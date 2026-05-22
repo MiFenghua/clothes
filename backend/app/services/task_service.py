@@ -13,7 +13,7 @@ from app.providers.persistence import (
     WardrobeRepository,
     canonical_task_owner_id,
 )
-from app.providers.tracing import InMemoryTraceRecorder
+from app.providers.tracing import TraceRecorder
 from app.schemas.domain import StyleTaskRequest, TaskStatus, WardrobeItem
 from app.schemas.favorites import FavoriteProduct, FavoriteProductCreate, SavedLook
 from app.schemas.results import StyleTaskResult, StyleTaskView
@@ -25,7 +25,7 @@ class TaskService:
     favorites_repository: FavoritesRepository
     wardrobe_repository: WardrobeRepository
     graph: StyleAgentGraph
-    tracer: InMemoryTraceRecorder
+    tracer: TraceRecorder
 
     def create_task(
         self,
@@ -127,7 +127,7 @@ class TaskService:
 
 def create_task_service(
     graph: StyleAgentGraph,
-    tracer: InMemoryTraceRecorder,
+    tracer: TraceRecorder,
     wardrobe_repository: WardrobeRepository | None = None,
     favorites_repository: FavoritesRepository | None = None,
     repository: TaskRepository | None = None,
