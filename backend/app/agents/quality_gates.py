@@ -7,8 +7,16 @@ from app.schemas.quality import GateStatus, ImageQualityReport, QualityGateRepor
 
 
 DETAIL_PATTERNS: dict[Marketplace, list[re.Pattern[str]]] = {
-    Marketplace.taobao: [re.compile(r"^https://item\.taobao\.com/item\.htm", re.I)],
-    Marketplace.tmall: [re.compile(r"^https://detail\.tmall\.com/item\.htm", re.I)],
+    Marketplace.taobao: [
+        re.compile(r"^https://item\.taobao\.com/item\.htm", re.I),
+        re.compile(r"^https://s\.click\.taobao\.com/", re.I),
+        re.compile(r"^https://uland\.taobao\.com/", re.I),
+    ],
+    Marketplace.tmall: [
+        re.compile(r"^https://detail\.tmall\.com/item\.htm", re.I),
+        re.compile(r"^https://s\.click\.taobao\.com/", re.I),
+        re.compile(r"^https://uland\.taobao\.com/", re.I),
+    ],
     Marketplace.amazon: [
         re.compile(r"^https://[^/]*amazon\.[^/]+/dp/[A-Z0-9]{10}(?:[/?]|$)", re.I),
         re.compile(r"^https://[^/]*amazon\.[^/]+/gp/product/[A-Z0-9]{10}(?:[/?]|$)", re.I),
@@ -101,6 +109,8 @@ def image_quality_gates(
     realism_score: float,
     threshold: float,
 ) -> ImageQualityReport:
+    artifact_blocking = artifact_score < 0.75
+    artifact_status = GateStatus.passed if artifact_score >= 0.9 else GateStatus.failed if artifact_blocking else GateStatus.warning
     gates = [
         QualityGateReport(
             gate="Identity Gate",
@@ -118,10 +128,10 @@ def image_quality_gates(
         ),
         QualityGateReport(
             gate="Artifact Gate",
-            status=GateStatus.passed if artifact_score >= 0.9 else GateStatus.failed,
+            status=artifact_status,
             score=artifact_score,
             reasons=["未发现明显肢体异常、文字、水印或多余人物"] if artifact_score >= 0.9 else ["存在变形、遮挡或生成瑕疵风险"],
-            blocking=artifact_score < 0.9,
+            blocking=artifact_blocking,
         ),
     ]
     overall = round(identity_score * 0.4 + garment_score * 0.28 + artifact_score * 0.2 + realism_score * 0.12, 4)
@@ -141,4 +151,3 @@ def image_quality_gates(
         accepted=accepted,
         retry_prompt_hint=hint,
     )
-

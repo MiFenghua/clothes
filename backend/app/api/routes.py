@@ -457,7 +457,7 @@ def _visible_wardrobe_item_ids(container: AppContainer, user: PublicUser | None,
 
 def _parse_marketplaces(value: str | None) -> list[Marketplace]:
     if not value:
-        return [Marketplace.taobao, Marketplace.tmall, Marketplace.jd, Marketplace.pdd, Marketplace.amazon]
+        return [Marketplace.taobao, Marketplace.tmall]
     parsed = []
     for part in _split_csv(value):
         parsed.append(Marketplace(part))

@@ -28,7 +28,7 @@ def request(**overrides) -> StyleTaskRequest:
         "photo_object_key": "uploads/person.jpg",
         "budget": Budget(min=300, max=900),
         "preferences": StylePreferences(liked_style="干净,显比例", avoid=None, height_cm=165, usual_size="M"),
-        "marketplaces": [Marketplace.taobao, Marketplace.tmall, Marketplace.amazon],
+        "marketplaces": [Marketplace.taobao, Marketplace.tmall],
     }
     base.update(overrides)
     return StyleTaskRequest(**base)
@@ -71,6 +71,17 @@ class MissingBagSearchProvider(LocalDemoSearchProvider):
         if products and products[0].category == ProductCategory.bag:
             return []
         return products
+
+
+class FakeModelQueryPlanner:
+    source = "fake_model"
+
+    async def build_queries(self, *, request, profile, constraints):
+        return [
+            "women cropped top clean waist ivory",
+            "women high waist pants clean denim",
+            "women low heel shoes clean black",
+        ]
 
 
 class BadPhotoProfileProvider:
@@ -196,6 +207,32 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(ProductCategory.top, categories)
         self.assertIn(ProductCategory.bottom, categories)
         self.assertNotIn(ProductCategory.bag, categories)
+
+    async def test_search_queries_can_come_from_model_planner(self) -> None:
+        tracer = InMemoryTraceRecorder()
+        graph = StyleAgentGraph(
+            settings=Settings(),
+            tracer=tracer,
+            search_provider=LocalDemoSearchProvider(),
+            image_provider=LocalTryOnImageProvider(),
+            query_planner=FakeModelQueryPlanner(),
+        )
+
+        result = await graph.run(task_id="task_model_queries", request=request())
+
+        self.assertEqual(result.status, TaskStatus.succeeded)
+        scout_event = next(
+            event for event in tracer.by_task("task_model_queries") if event["node"] == "ProductScoutAgent"
+        )
+        self.assertEqual(scout_event["payload"]["query_source"], "fake_model")
+        self.assertEqual(
+            scout_event["payload"]["queries"],
+            [
+                "women cropped top clean waist ivory",
+                "women high waist pants clean denim",
+                "women low heel shoes clean black",
+            ],
+        )
 
     async def test_retry_image_reuses_approved_outfit_without_recommendation_search(self) -> None:
         tracer = InMemoryTraceRecorder()

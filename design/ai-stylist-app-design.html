@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI 搭配师 App 设计稿</title>
+  <style>
+    :root {
+      --page: #f5f4f0;
+      --surface: #ffffff;
+      --surface-2: #fbfaf7;
+      --ink: #1e2428;
+      --muted: #697078;
+      --subtle: #8d949b;
+      --line: #e2ded6;
+      --coral: #e85d4f;
+      --coral-dark: #c7473d;
+      --coral-soft: #fdedea;
+      --sage: #6d9277;
+      --sage-soft: #eaf3ec;
+      --teal: #227c73;
+      --denim: #4c6f91;
+      --blue-soft: #e8f0f7;
+      --gold: #c58c2f;
+      --gold-soft: #fff4dc;
+      --error: #c13f36;
+      --error-soft: #fbe9e7;
+      --shadow: 0 18px 45px rgba(31, 28, 24, .12);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--page);
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); }
+    .board { min-width: 1760px; padding: 40px; }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 10px 26px rgba(31, 28, 24, .06);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px;
+      margin-bottom: 22px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 700;
+      color: var(--coral-dark);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 30px; line-height: 38px; }
+    h2 { font-size: 18px; line-height: 24px; }
+    .summary {
+      margin-top: 8px;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 20px;
+    }
+    .tag-row, .system, .screens, .flow, .chips, .actions, .product {
+      display: flex;
+      align-items: center;
+    }
+    .tag-row { gap: 8px; }
+    .tag {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.coral { color: var(--coral-dark); background: var(--coral-soft); }
+    .tag.gold { color: var(--gold); background: var(--gold-soft); }
+    .tag.green { color: var(--teal); background: var(--sage-soft); }
+    .tag.blue { color: var(--denim); background: var(--blue-soft); }
+
+    .system {
+      align-items: stretch;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    .system-card {
+      padding: 18px;
+      min-height: 190px;
+    }
+    .palette { width: 430px; }
+    .components { width: 650px; }
+    .notes { width: 640px; }
+    .system-card p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 19px;
+    }
+    .swatches {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .swatch { width: 62px; text-align: center; }
+    .swatch-color { width: 62px; height: 42px; border-radius: 8px; }
+    .swatch span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 14px;
+    }
+    .note-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 19px;
+    }
+    .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--coral); flex: 0 0 auto; }
+
+    .screens {
+      align-items: flex-start;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+    .phone {
+      width: 375px;
+      height: 812px;
+      overflow: hidden;
+      border-radius: 28px;
+      background: var(--surface-2);
+      box-shadow: var(--shadow);
+    }
+    .status {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .indicators { display: flex; gap: 5px; align-items: center; }
+    .signal, .wifi, .battery { background: var(--ink); opacity: .9; }
+    .signal { width: 16px; height: 9px; border-radius: 2px; }
+    .wifi { width: 14px; height: 9px; border-radius: 9px 9px 3px 3px; }
+    .battery { width: 20px; height: 9px; border-radius: 2px; }
+    .nav {
+      padding: 6px 24px 14px;
+      background: var(--surface-2);
+    }
+    .nav h2 { font-size: 22px; line-height: 28px; }
+    .nav p {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 18px;
+    }
+    .content {
+      padding: 18px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .card {
+      width: 327px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 14px;
+    }
+    .upload-card { box-shadow: 0 8px 20px rgba(31, 28, 24, .06); }
+    .upload-main {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .photo {
+      width: 96px;
+      height: 130px;
+      border-radius: 8px;
+      background: #e8e5df;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex: 0 0 auto;
+    }
+    .person { display: flex; flex-direction: column; align-items: center; }
+    .head { width: 22px; height: 22px; border-radius: 999px; background: #b78a73; }
+    .top-garment {
+      width: 40px;
+      height: 45px;
+      margin-top: 1px;
+      border: 1px solid #e9b7af;
+      border-radius: 8px;
+      background: var(--coral-soft);
+    }
+    .legs { display: flex; gap: 4px; }
+    .leg { width: 15px; height: 50px; border-radius: 5px; background: var(--denim); }
+    .upload-copy h3 { margin: 8px 0 6px; font-size: 18px; line-height: 23px; }
+    .upload-copy p { width: 168px; color: var(--muted); font-size: 12px; line-height: 17px; }
+    .tip-row { display: flex; gap: 8px; margin-top: 12px; }
+    .field-label {
+      margin-bottom: 8px;
+      font-size: 14px;
+      line-height: 18px;
+      font-weight: 700;
+    }
+    .chips { gap: 7px; margin-bottom: 13px; flex-wrap: nowrap; }
+    .chip {
+      min-height: 36px;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      font-size: 13px;
+      line-height: 17px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .chip.active {
+      border-color: var(--coral);
+      background: var(--coral);
+      color: white;
+      font-weight: 700;
+    }
+    .input {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      font-size: 14px;
+    }
+    .input span:first-child { color: var(--muted); font-size: 13px; font-weight: 600; }
+    .input span:last-child { color: var(--subtle); }
+    .button {
+      height: 48px;
+      width: 327px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: var(--coral);
+      color: white;
+      font-size: 16px;
+      line-height: 20px;
+      font-weight: 800;
+    }
+    .secondary {
+      width: 157px;
+      height: 44px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    .progress-content { padding-top: 26px; gap: 18px; }
+    .progress-hero { padding: 18px; }
+    .meter {
+      height: 176px;
+      border-radius: 8px;
+      background: var(--coral-soft);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .ring {
+      width: 104px;
+      height: 104px;
+      border: 8px solid var(--coral);
+      border-radius: 999px;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--coral-dark);
+      font-size: 26px;
+      line-height: 32px;
+      font-weight: 800;
+    }
+    .meter p { font-size: 15px; line-height: 20px; font-weight: 800; }
+    .steps { display: flex; flex-direction: column; gap: 13px; }
+    .step {
+      display: flex;
+      width: 295px;
+      align-items: center;
+      gap: 10px;
+    }
+    .step-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+    .step.done .step-dot { background: var(--teal); }
+    .step.current .step-dot { background: var(--coral); }
+    .step.todo .step-dot { background: #d8d5ce; }
+    .step strong { display: block; font-size: 14px; line-height: 18px; }
+    .step span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 14px; }
+    .query { color: var(--muted); font-size: 12px; line-height: 18px; white-space: pre-line; }
+
+    .result-content { padding-top: 14px; gap: 13px; }
+    .tryon-preview {
+      height: 224px;
+      border-radius: 8px;
+      background: #efece5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    .tryon-preview .photo { width: 130px; height: 176px; }
+    .tryon-copy { width: 120px; }
+    .tryon-copy h3 {
+      margin-top: 8px;
+      font-size: 17px;
+      line-height: 23px;
+    }
+    .tryon-copy p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 16px;
+    }
+    .reason h3 { font-size: 18px; line-height: 23px; }
+    .reason p { margin-top: 8px; color: var(--muted); font-size: 13px; line-height: 19px; }
+    .product-heading {
+      display: flex;
+      width: 327px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .product-heading strong { font-size: 16px; line-height: 20px; }
+    .product-heading span { color: var(--coral-dark); font-size: 13px; line-height: 17px; font-weight: 800; }
+    .product {
+      width: 327px;
+      min-height: 94px;
+      padding: 10px;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+    .thumb {
+      width: 72px;
+      height: 72px;
+      border-radius: 8px;
+      background: #f1efe9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+    .shirt {
+      width: 42px;
+      height: 34px;
+      border-radius: 7px;
+      border: 1px solid #edb8b0;
+      background: var(--coral-soft);
+    }
+    .pants { display: flex; gap: 4px; }
+    .pants div { width: 16px; height: 46px; border-radius: 4px; background: var(--denim); }
+    .shoe { width: 50px; height: 18px; border-radius: 8px; background: #303940; box-shadow: 0 8px 0 #9b7a54; }
+    .product-info { flex: 1; }
+    .category { color: var(--coral-dark); font-size: 11px; line-height: 14px; font-weight: 800; }
+    .product-title { margin-top: 4px; font-size: 13px; line-height: 17px; font-weight: 700; }
+    .product-reason { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 15px; }
+    .buy { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .price { font-size: 15px; line-height: 19px; font-weight: 800; }
+    .copy {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: white;
+      font-size: 11px;
+      line-height: 14px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .actions { width: 327px; gap: 12px; }
+
+    .error-content { padding-top: 50px; gap: 18px; }
+    .error-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      padding: 20px;
+      text-align: center;
+    }
+    .error-icon {
+      width: 78px;
+      height: 78px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: var(--error-soft);
+      color: var(--error);
+      font-size: 34px;
+      font-weight: 900;
+    }
+    .error-card h3 { font-size: 20px; line-height: 26px; }
+    .error-card > p { color: var(--muted); font-size: 14px; line-height: 21px; }
+    .checklist {
+      width: 287px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      text-align: left;
+    }
+    .checklist strong { display: block; margin-bottom: 8px; font-size: 13px; line-height: 17px; }
+    .checklist div {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 17px;
+      margin-top: 8px;
+    }
+    .checklist div::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--sage);
+      flex: 0 0 auto;
+    }
+    .button.error { background: var(--error); }
+
+    .flow {
+      padding: 20px;
+      gap: 14px;
+    }
+    .flow h2 { width: 126px; flex: 0 0 auto; }
+    .flow-step {
+      width: 205px;
+      height: 78px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      font-size: 14px;
+      line-height: 18px;
+      font-weight: 800;
+      text-align: center;
+    }
+    .flow-step.tryon { color: var(--coral-dark); background: var(--coral-soft); }
+    .flow-step.link { color: var(--teal); background: var(--sage-soft); }
+    .arrow { color: var(--subtle); font-size: 18px; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <section class="header panel">
+      <div>
+        <p class="eyebrow">微信小程序 Demo / AI Styling Agent</p>
+        <h1>AI 搭配师 App 设计稿</h1>
+        <p class="summary">围绕“上传全身照 -> AI 分析 -> 搜商品 -> 生成 1 套最佳穿搭 -> 展示试穿图和商品链接”的核心链路设计。</p>
+      </div>
+      <div class="tag-row">
+        <span class="tag coral">只推荐 1 套</span>
+        <span class="tag gold">60-120 秒生成</span>
+        <span class="tag green">复制淘宝链接</span>
+      </div>
+    </section>
+
+    <section class="system">
+      <div class="system-card palette panel">
+        <h2>视觉基调</h2>
+        <p>暖白底色、珊瑚行动色、鼠尾草绿状态色和牛仔蓝商品图块，保持女性穿搭场景的亲和但不过度甜腻。</p>
+        <div class="swatches">
+          <div class="swatch"><div class="swatch-color" style="background: var(--coral)"></div><span>行动</span></div>
+          <div class="swatch"><div class="swatch-color" style="background: var(--sage)"></div><span>成功</span></div>
+          <div class="swatch"><div class="swatch-color" style="background: var(--denim)"></div><span>商品</span></div>
+          <div class="swatch"><div class="swatch-color" style="background: var(--gold)"></div><span>提示</span></div>
+          <div class="swatch"><div class="swatch-color" style="background: var(--ink)"></div><span>文字</span></div>
+        </div>
+      </div>
+
+      <div class="system-card components panel">
+        <h2>关键控件</h2>
+        <div class="chips" style="margin-top: 14px">
+          <span class="chip active">日常</span>
+          <span class="chip">通勤</span>
+          <span class="chip">约会</span>
+          <span class="chip">旅行</span>
+          <span class="chip">聚会</span>
+        </div>
+        <div class="input"><span>喜欢风格</span><span>干净、显比例</span></div>
+        <div class="button" style="margin-top: 12px">生成我的穿搭</div>
+      </div>
+
+      <div class="system-card notes panel">
+        <h2>体验原则</h2>
+        <div class="note-row"><span class="dot"></span><span>默认值减少填写成本：日常出街、中等预算、干净显比例。</span></div>
+        <div class="note-row"><span class="dot"></span><span>进度页明确长耗时预期，避免用户误以为卡住。</span></div>
+        <div class="note-row"><span class="dot"></span><span>试穿图失败不展示 mock 图，直接提示换更清晰全身照。</span></div>
+        <div class="note-row"><span class="dot"></span><span>淘宝链接以复制为主，规避小程序 web-view 域名限制。</span></div>
+      </div>
+    </section>
+
+    <section class="screens">
+      <article class="phone">
+        <div class="status"><span>9:41</span><span class="indicators"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+        <div class="nav"><h2>AI 搭配师</h2><p>上传全身照，生成一套适合你的穿搭</p></div>
+        <div class="content">
+          <section class="card upload-card">
+            <div class="upload-main">
+              <div class="photo">
+                <div class="person"><div class="head"></div><div class="top-garment"></div><div class="legs"><span class="leg"></span><span class="leg"></span></div></div>
+              </div>
+              <div class="upload-copy">
+                <span class="tag green">照片已选择</span>
+                <h3>清晰全身照</h3>
+                <p>AI 只分析穿搭相关信息，用于生成试穿预览。</p>
+              </div>
+            </div>
+            <div class="tip-row"><span class="tag blue">JPG/PNG/WEBP</span><span class="tag gold">建议小于 8MB</span></div>
+          </section>
+
+          <section class="card">
+            <div class="field-label">穿搭场景</div>
+            <div class="chips"><span class="chip active">日常</span><span class="chip">通勤</span><span class="chip">约会</span><span class="chip">旅行</span><span class="chip">聚会</span></div>
+            <div class="field-label">预算</div>
+            <div class="chips"><span class="chip">300以内</span><span class="chip active">300-800</span><span class="chip">800以上</span></div>
+            <div class="input"><span>身高</span><span>165 cm</span></div>
+            <div class="input"><span>常穿尺码</span><span>M</span></div>
+            <div class="input"><span>喜欢风格</span><span>干净、轻熟</span></div>
+            <div class="input"><span>避雷项</span><span>过度宽松</span></div>
+          </section>
+          <div class="button">生成我的穿搭</div>
+        </div>
+      </article>
+
+      <article class="phone">
+        <div class="status"><span>9:41</span><span class="indicators"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+        <div class="nav"><h2>正在为你搭配</h2><p>预计需要 60-120 秒，请保持页面打开</p></div>
+        <div class="content progress-content">
+          <section class="card progress-hero">
+            <div class="meter"><div class="ring">45%</div><p>正在搜索适合你的商品</p></div>
+          </section>
+          <section class="card">
+            <div class="steps">
+              <div class="step done"><span class="step-dot"></span><div><strong>分析照片特征</strong><span>已生成穿搭画像</span></div></div>
+              <div class="step current"><span class="step-dot"></span><div><strong>搜索淘宝商品</strong><span>正在筛选标题、价格、图片和链接</span></div></div>
+              <div class="step todo"><span class="step-dot"></span><div><strong>组合最佳穿搭</strong><span>只保留最推荐 1 套</span></div></div>
+              <div class="step todo"><span class="step-dot"></span><div><strong>生成试穿效果图</strong><span>完成后自动跳转结果页</span></div></div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="field-label">搜索方向</div>
+            <p class="query">短款针织上衣 女 春夏 显比例
+高腰直筒牛仔裤 女 显腿长
+低跟单鞋 女 通勤 百搭</p>
+          </section>
+        </div>
+      </article>
+
+      <article class="phone">
+        <div class="status"><span>9:41</span><span class="indicators"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+        <div class="nav"><h2>今日推荐穿搭</h2><p>清爽显比例日常穿搭</p></div>
+        <div class="content result-content">
+          <section class="card">
+            <div class="tryon-preview">
+              <div class="photo">
+                <div class="person"><div class="head"></div><div class="top-garment"></div><div class="legs"><span class="leg"></span><span class="leg"></span></div></div>
+              </div>
+              <div class="tryon-copy">
+                <span class="tag coral">AI 试穿效果图</span>
+                <h3>短款针织上衣<br>高腰直筒牛仔裤<br>低跟单鞋</h3>
+                <p>保留本人脸部与身材比例，展示完整人物预览。</p>
+              </div>
+            </div>
+          </section>
+          <section class="card reason"><h3>清爽显比例日常穿搭</h3><p>短款上衣和高腰直筒下装提高腰线，低饱和配色干净自然，适合日常出街。</p></section>
+          <div class="product-heading"><strong>商品清单</strong><span>合计 ¥566</span></div>
+          <div class="product"><div class="thumb"><div class="shirt"></div></div><div class="product-info"><div class="category">上衣</div><div class="product-title">短款针织上衣女春夏薄款</div><div class="product-reason">强化比例</div></div><div class="buy"><span class="price">¥129</span><span class="copy">复制链接</span></div></div>
+          <div class="product"><div class="thumb"><div class="pants"><div></div><div></div></div></div><div class="product-info"><div class="category">下装</div><div class="product-title">高腰直筒牛仔裤女显腿长</div><div class="product-reason">拉长腿部线条</div></div><div class="buy"><span class="price">¥199</span><span class="copy">复制链接</span></div></div>
+          <div class="product"><div class="thumb"><div class="shoe"></div></div><div class="product-info"><div class="category">鞋履</div><div class="product-title">低跟单鞋女通勤百搭</div><div class="product-reason">日常舒适</div></div><div class="buy"><span class="price">¥238</span><span class="copy">复制链接</span></div></div>
+          <div class="actions"><div class="button secondary">重新生成</div><div class="button secondary">换一张照片</div></div>
+        </div>
+      </article>
+
+      <article class="phone">
+        <div class="status"><span>9:41</span><span class="indicators"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+        <div class="nav"><h2>生成失败</h2><p>本次任务没有产出可展示试穿图</p></div>
+        <div class="content error-content">
+          <section class="card error-card">
+            <div class="error-icon">!</div>
+            <h3>本次试穿图生成失败</h3>
+            <p>请换一张更清晰的全身照后重试。Demo 阶段不会使用 mock 图替代，以免误导结果。</p>
+            <div class="checklist">
+              <strong>建议重新上传时确认</strong>
+              <div>人物尽量完整入镜</div>
+              <div>脸部清晰可见</div>
+              <div>光线充足且无遮挡</div>
+            </div>
+          </section>
+          <div class="button error">重新上传</div>
+          <div class="button secondary" style="width: 327px">稍后再试</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="flow panel">
+      <h2>核心任务流</h2>
+      <div class="flow-step">上传全身照</div><span class="arrow">→</span>
+      <div class="flow-step">AI 分析</div><span class="arrow">→</span>
+      <div class="flow-step">实时搜商品</div><span class="arrow">→</span>
+      <div class="flow-step">组合 1 套穿搭</div><span class="arrow">→</span>
+      <div class="flow-step tryon">生成试穿图</div><span class="arrow">→</span>
+      <div class="flow-step link">展示商品链接</div>
+    </section>
+  </main>
+</body>
+</html>

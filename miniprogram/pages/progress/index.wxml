@@ -1,0 +1,54 @@
+<view class="app-page progress-page">
+  <view class="topbar">
+    <button class="nav-icon" bindtap="goHome">‹</button>
+    <text class="topbar-title">正在为你搭配</text>
+    <view class="nav-icon ghost"></view>
+  </view>
+
+  <view class="score-card">
+    <text class="score-label">生成进度</text>
+    <view class="score-row">
+      <text class="score-value">{{progress || 0}}%</text>
+      <text class="score-message">{{message}}</text>
+    </view>
+    <view class="meter">
+      <view class="meter-fill" style="width: {{progress || 0}}%;"></view>
+    </view>
+  </view>
+
+  <view class="canvas-card card">
+    <view class="star star-one"></view>
+    <view class="star star-two"></view>
+    <view class="ai-model">
+      <view class="model-hair"></view>
+      <view class="model-face"></view>
+      <view class="model-jacket"></view>
+      <view class="model-top"></view>
+      <view class="model-pants"></view>
+      <view class="model-shoes"></view>
+    </view>
+    <view class="tool-rail">
+      <view>图</view>
+      <text>分析</text>
+      <view>衣</view>
+      <text>选品</text>
+      <view>像</view>
+      <text>试穿</text>
+    </view>
+  </view>
+
+  <view class="steps-card card">
+    <view class="section-head">
+      <text class="section-title">任务链路</text>
+      <text class="section-subtitle">预计 60-120 秒</text>
+    </view>
+    <view wx:for="{{steps}}" wx:key="status" class="step {{item.state}}">
+      <view class="step-dot"></view>
+      <view class="step-line"></view>
+      <view class="step-copy">
+        <text class="step-title">{{item.title}}</text>
+        <text class="step-desc">{{item.desc}}</text>
+      </view>
+    </view>
+  </view>
+</view>

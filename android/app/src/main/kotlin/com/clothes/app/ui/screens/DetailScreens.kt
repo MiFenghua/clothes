@@ -115,7 +115,12 @@ fun OutfitDetailScreen(state: UiState, viewModel: StyleViewModel, modifier: Modi
         item { ScoreText(score, "适配度") }
         item {
             Box(Modifier.fillMaxWidth().height(430.dp).clip(RoundedCornerShape(22.dp)).background(Color.White)) {
-                OutfitPlaceholder(Modifier.fillMaxSize())
+                val image = outfitDetailHeroImage(state)
+                if (image == null) {
+                    OutfitPlaceholder(Modifier.fillMaxSize())
+                } else {
+                    ClozRemoteImage(image, Modifier.fillMaxSize(), ContentScale.Crop)
+                }
                 Column(Modifier.align(Alignment.CenterEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     RoundIconButton(Icons.Filled.Refresh, "换背景") {}
                     RoundIconButton(Icons.Filled.IosShare, "换姿势") {}
@@ -215,6 +220,8 @@ private fun DetailRow(label: String, value: String) {
         Text(value, color = ClozColors.Ink, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+fun outfitDetailHeroImage(state: UiState): String? = state.result?.tryOnImageUrl?.takeIf { it.isNotBlank() }
 
 private fun currentOutfit(state: UiState): OutfitCandidate? = state.result?.outfit
 

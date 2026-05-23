@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import struct
+import zlib
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import quote
@@ -60,6 +62,16 @@ class LocalTryOnImageProvider:
         return candidates
 
     def _preview_tryon(self, task_id: str, attempt: int, index: int) -> str:
+        accent_sets = [
+            ((232, 93, 79), (76, 111, 145), (48, 57, 64)),
+            ((184, 79, 119), (91, 120, 103), (63, 60, 72)),
+            ((47, 118, 104), (108, 98, 88), (187, 132, 47)),
+        ]
+        top, bottom, shoe = accent_sets[(attempt + index) % len(accent_sets)]
+        png = _preview_tryon_png(top=top, bottom=bottom, shoe=shoe)
+        encoded = base64.b64encode(png).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+
         svg = f"""
         <svg xmlns="http://www.w3.org/2000/svg" width="720" height="1080" viewBox="0 0 720 1080">
           <rect width="720" height="1080" fill="#f5f4f0"/>
@@ -154,3 +166,96 @@ def _file_to_data_url(path: Path) -> str:
     }.get(path.suffix.lower(), "image/jpeg")
     data = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{data}"
+
+
+def _preview_tryon_png(
+    *,
+    top: tuple[int, int, int],
+    bottom: tuple[int, int, int],
+    shoe: tuple[int, int, int],
+) -> bytes:
+    width = 360
+    height = 540
+    pixels = bytearray(width * height * 3)
+    _fill_rect(pixels, width, 0, 0, width, height, (245, 244, 240))
+    _fill_rect(pixels, width, 55, 35, 305, 505, (255, 253, 249))
+    _fill_circle(pixels, width, 180, 88, 29, (185, 135, 115))
+    _fill_polygon(pixels, width, [(134, 133), (226, 133), (250, 263), (110, 263)], top)
+    _fill_polygon(pixels, width, [(125, 263), (171, 263), (164, 434), (116, 434)], bottom)
+    _fill_polygon(pixels, width, [(189, 263), (235, 263), (244, 434), (196, 434)], bottom)
+    _fill_rect(pixels, width, 106, 435, 172, 452, shoe)
+    _fill_rect(pixels, width, 188, 435, 254, 452, shoe)
+    return _encode_png(width, height, bytes(pixels))
+
+
+def _fill_rect(
+    pixels: bytearray,
+    width: int,
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+    color: tuple[int, int, int],
+) -> None:
+    height = len(pixels) // (width * 3)
+    for y in range(max(0, top), min(height, bottom)):
+        row = y * width * 3
+        for x in range(max(0, left), min(width, right)):
+            offset = row + x * 3
+            pixels[offset : offset + 3] = bytes(color)
+
+
+def _fill_circle(
+    pixels: bytearray,
+    width: int,
+    cx: int,
+    cy: int,
+    radius: int,
+    color: tuple[int, int, int],
+) -> None:
+    height = len(pixels) // (width * 3)
+    radius_squared = radius * radius
+    for y in range(max(0, cy - radius), min(height, cy + radius + 1)):
+        row = y * width * 3
+        for x in range(max(0, cx - radius), min(width, cx + radius + 1)):
+            if (x - cx) * (x - cx) + (y - cy) * (y - cy) <= radius_squared:
+                offset = row + x * 3
+                pixels[offset : offset + 3] = bytes(color)
+
+
+def _fill_polygon(
+    pixels: bytearray,
+    width: int,
+    points: list[tuple[int, int]],
+    color: tuple[int, int, int],
+) -> None:
+    height = len(pixels) // (width * 3)
+    min_y = max(0, min(y for _, y in points))
+    max_y = min(height - 1, max(y for _, y in points))
+    for y in range(min_y, max_y + 1):
+        intersections: list[float] = []
+        for index, (x1, y1) in enumerate(points):
+            x2, y2 = points[(index + 1) % len(points)]
+            if (y1 <= y < y2) or (y2 <= y < y1):
+                intersections.append(x1 + (y - y1) * (x2 - x1) / (y2 - y1))
+        intersections.sort()
+        for left, right in zip(intersections[0::2], intersections[1::2]):
+            _fill_rect(pixels, width, int(left), y, int(right) + 1, y + 1, color)
+
+
+def _encode_png(width: int, height: int, rgb: bytes) -> bytes:
+    stride = width * 3
+    scanlines = b"".join(b"\x00" + rgb[y * stride : (y + 1) * stride] for y in range(height))
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)),
+            _png_chunk(b"IDAT", zlib.compress(scanlines, level=9)),
+            _png_chunk(b"IEND", b""),
+        ]
+    )
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    checksum = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
+    return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", checksum)

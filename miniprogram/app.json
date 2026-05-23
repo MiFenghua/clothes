@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/progress/index",
+    "pages/result/index",
+    "pages/error/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "clozAi",
+    "navigationBarBackgroundColor": "#fbfaff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f7fb",
+    "navigationStyle": "custom"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

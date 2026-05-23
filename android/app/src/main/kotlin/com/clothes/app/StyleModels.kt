@@ -59,7 +59,7 @@ data class StyleForm(
     val bodyShape: String = "梨形",
     val skinTone: String = "暖白皮",
     val hairTone: String = "深棕色",
-    val marketplaces: String = "taobao,tmall,amazon",
+    val marketplaces: String = "taobao,tmall",
     val wardrobeItemIds: String = "",
 )
 

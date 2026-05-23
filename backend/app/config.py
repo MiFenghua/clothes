@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     auth_session_max_age_days: int = 30
     temporal_address: str = "127.0.0.1:7233"
     temporal_task_queue: str = "clothes-style-tasks"
-    search_provider: str = "browser"
+    search_provider: str = "taobao_union"
     image_provider: str = "ark"
     model_provider: str = "ark"
     recommendation_threshold: float = 0.82
@@ -39,11 +39,15 @@ class Settings(BaseSettings):
     ark_image_model: str = "doubao-seedream-5-0-260128"
     ark_image_size: str = "2K"
     ark_watermark: bool = True
-    browser_headless: bool = True
-    browser_chrome_path: str | None = None
-    browser_timeout_ms: int = 30000
-    browser_user_data_dir: Path = BACKEND_ROOT / "storage/browser-profile"
-    amazon_marketplace_base_url: str = "https://www.amazon.com"
+    taobao_union_endpoint: str = "https://eco.taobao.com/router/rest"
+    taobao_union_method: str = "taobao.tbk.dg.material.optional.upgrade"
+    taobao_union_app_key: str | None = None
+    taobao_union_app_secret: str | None = None
+    taobao_union_adzone_id: str | None = None
+    taobao_union_site_id: str | None = None
+    taobao_union_material_id: int = 6708
+    taobao_union_sign_method: str = "md5"
+    taobao_union_timeout_seconds: int = 15
 
     model_config = SettingsConfigDict(env_prefix="STYLE_BACKEND_", env_file=".env", extra="ignore")
 

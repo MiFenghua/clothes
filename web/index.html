@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI 搭配师 Web 测试端</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>AI 搭配师</h1>
+          <p>Web 测试端</p>
+        </div>
+        <div class="top-actions">
+          <div class="account-chip" id="authStatus" hidden>
+            <span id="authUserName"></span>
+            <button id="logoutButton" type="button">退出</button>
+          </div>
+          <a class="health-link" href="/health" target="_blank" rel="noreferrer">API</a>
+        </div>
+      </header>
+
+      <section class="auth-panel" id="authPanel" hidden>
+        <div>
+          <h2>登录后生成个人穿搭</h2>
+          <p>账号用于保存登录状态，并把本次穿搭任务归属到当前用户。</p>
+        </div>
+        <form class="auth-card" id="authForm">
+          <div class="auth-switch" role="tablist" aria-label="账号操作">
+            <button class="is-active" id="loginModeButton" type="button">登录</button>
+            <button id="registerModeButton" type="button">注册</button>
+          </div>
+          <div class="field" id="nameField" hidden>
+            <label for="authName">昵称</label>
+            <input id="authName" name="name" type="text" autocomplete="name" placeholder="可选" />
+          </div>
+          <div class="field">
+            <label for="authEmail">邮箱</label>
+            <input id="authEmail" name="email" type="email" autocomplete="email" required />
+          </div>
+          <div class="field">
+            <label for="authPassword">密码</label>
+            <input id="authPassword" name="password" type="password" autocomplete="current-password" required minlength="8" />
+          </div>
+          <button class="primary" id="authSubmitButton" type="submit">登录</button>
+          <button class="secondary" id="googleLoginButton" type="button" hidden>使用 Google 登录</button>
+          <p class="auth-message" id="authMessage" role="status"></p>
+        </form>
+      </section>
+
+      <section id="appContent" hidden>
+        <nav class="tabs" aria-label="测试模式">
+          <button class="tab is-active" type="button" data-tab="flow">完整流程</button>
+          <button class="tab" type="button" data-tab="search">商品搜索</button>
+        </nav>
+
+        <section class="panel is-active" id="flowPanel">
+          <form id="taskForm" class="layout">
+            <section class="upload-area">
+              <label class="dropzone" for="photoInput">
+                <input id="photoInput" name="photo" type="file" accept="image/jpeg,image/png,image/webp" />
+                <img id="photoPreview" alt="" />
+                <span class="drop-title">选择全身照片</span>
+                <span class="drop-hint">JPG / PNG / WEBP，8MB 以内</span>
+              </label>
+            </section>
+
+            <section class="fields">
+            <div class="field">
+              <label for="scene">穿搭场景</label>
+              <select id="scene" name="scene">
+                <option value="daily">日常出街</option>
+                <option value="commute">通勤</option>
+                <option value="date">约会</option>
+                <option value="travel">旅行</option>
+                <option value="party">聚会</option>
+              </select>
+            </div>
+
+            <div class="field-grid">
+              <div class="field">
+                <label for="budgetMin">预算下限</label>
+                <input id="budgetMin" name="budgetMin" type="number" value="300" min="0" />
+              </div>
+              <div class="field">
+                <label for="budgetMax">预算上限</label>
+                <input id="budgetMax" name="budgetMax" type="number" value="800" min="0" />
+              </div>
+            </div>
+
+            <div class="field-grid">
+              <div class="field">
+                <label for="ageYears">年龄</label>
+                <input id="ageYears" name="ageYears" type="number" placeholder="可选" min="12" max="90" />
+              </div>
+              <div class="field">
+                <label for="heightCm">身高</label>
+                <input id="heightCm" name="heightCm" type="number" placeholder="可选" />
+              </div>
+            </div>
+
+            <div class="field-grid">
+              <div class="field">
+                <label for="weightKg">体重</label>
+                <input id="weightKg" name="weightKg" type="number" placeholder="可选" />
+              </div>
+              <div class="field">
+                <label for="usualSize">常穿尺码</label>
+                <input id="usualSize" name="usualSize" type="text" placeholder="如 M / 160" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="likedStyle">喜欢风格</label>
+              <input id="likedStyle" name="likedStyle" type="text" placeholder="如 干净、温柔、通勤" />
+            </div>
+            <div class="field">
+              <label for="avoid">避雷项</label>
+              <input id="avoid" name="avoid" type="text" placeholder="如 过宽松、荧光色" />
+            </div>
+
+            <button id="submitButton" class="primary" type="submit" disabled>生成我的穿搭</button>
+            </section>
+          </form>
+
+          <section class="progress" id="progressPanel" hidden>
+            <div class="progress-head">
+              <strong id="taskStatus">任务已创建</strong>
+              <span id="taskProgress">0%</span>
+            </div>
+            <div class="meter"><span id="meterFill"></span></div>
+            <ol class="steps" id="steps"></ol>
+          </section>
+
+          <section class="result" id="resultPanel" hidden></section>
+        </section>
+
+        <section class="panel" id="searchPanel">
+          <form id="searchForm" class="search-form">
+            <div class="field">
+              <label for="queries">商品关键词</label>
+              <textarea id="queries" rows="4">短款针织上衣 女 春夏
+高腰直筒牛仔裤 女 显腿长
+低跟单鞋 女 通勤 百搭</textarea>
+            </div>
+            <button class="primary" type="submit">搜索外部电商链接</button>
+          </form>
+          <section class="products" id="searchResults"></section>
+        </section>
+      </section>
+    </main>
+
+    <template id="productTemplate">
+      <article class="product">
+        <img class="product-image" alt="" />
+        <div class="product-body">
+          <span class="badge"></span>
+          <h3></h3>
+          <p class="price"></p>
+          <p class="reason"></p>
+          <div class="product-actions">
+            <button type="button" class="copy">复制链接</button>
+            <a target="_blank" rel="noreferrer">打开</a>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

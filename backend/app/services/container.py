@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from app.agents.graph import StyleAgentGraph
@@ -23,7 +24,13 @@ from app.providers.postgres import (
     PostgresWardrobeRepository,
 )
 from app.providers.product_content import FavoriteRepository, InspirationRepository, ProductContentStore, ProfileRepository
-from app.providers.search import BrowserProductSearchProvider, LocalDemoSearchProvider, ProductSearchProvider
+from app.providers.query_planner import ArkSearchQueryPlanner, SearchQueryPlanner
+from app.providers.search import (
+    CompositeProductSearchProvider,
+    LocalDemoSearchProvider,
+    ProductSearchProvider,
+    TaobaoUnionProductSearchProvider,
+)
 from app.providers.storage import LocalObjectStorage
 from app.providers.tracing import InMemoryTraceRecorder, TraceRecorder
 from app.providers.vision import (
@@ -69,6 +76,7 @@ class AppContainer:
             self.favorites_repository = InMemoryFavoritesRepository()
         self.google_id_token_verifier = GoogleOAuthIdTokenVerifier(self.settings.google_client_id)
         self.photo_provider = self._create_photo_provider()
+        self.query_planner = self._create_query_planner()
         self.search_provider = self._create_search_provider()
         self.image_provider = self._create_image_provider()
         self.image_quality_provider = self._create_image_quality_provider()
@@ -82,6 +90,7 @@ class AppContainer:
             search_provider=self.search_provider,
             image_provider=self.image_provider,
             photo_provider=self.photo_provider,
+            query_planner=self.query_planner,
             image_quality_provider=self.image_quality_provider,
             wardrobe_products=self.wardrobe_repository.products_for_ids,
         )
@@ -99,9 +108,37 @@ class AppContainer:
         return None
 
     def _create_search_provider(self) -> ProductSearchProvider:
-        if self.settings.search_provider == "browser":
-            return BrowserProductSearchProvider(self.settings)
-        return LocalDemoSearchProvider()
+        provider_names = [name.strip() for name in self.settings.search_provider.split(",") if name.strip()]
+        if not provider_names:
+            provider_names = ["taobao_union"]
+
+        providers: list[ProductSearchProvider] = []
+        for name in provider_names:
+            if name in {"taobao_union", "taobao", "tbk"}:
+                if not self._taobao_union_configured() and os.getenv("STYLE_BACKEND_SEARCH_PROVIDER") is None:
+                    providers.append(LocalDemoSearchProvider())
+                    continue
+                providers.append(TaobaoUnionProductSearchProvider(self.settings))
+            elif name in {"local", "local_demo"}:
+                providers.append(LocalDemoSearchProvider())
+            else:
+                raise RuntimeError(f"Unsupported STYLE_BACKEND_SEARCH_PROVIDER: {name}")
+
+        if len(providers) == 1:
+            return providers[0]
+        return CompositeProductSearchProvider(providers)
+
+    def _taobao_union_configured(self) -> bool:
+        return bool(
+            self.settings.taobao_union_app_key
+            and self.settings.taobao_union_app_secret
+            and self.settings.taobao_union_adzone_id
+        )
+
+    def _create_query_planner(self) -> SearchQueryPlanner | None:
+        if self.settings.model_provider == "ark" and self.settings.ark_api_key:
+            return ArkSearchQueryPlanner(self.settings)
+        return None
 
     def _create_image_provider(self) -> TryOnImageProvider:
         if self.settings.image_provider == "ark" and self.settings.ark_api_key:

@@ -24,18 +24,21 @@ interfaces and can be selected by configuration.
 The production path is selected through `STYLE_BACKEND_*` environment variables:
 
 ```env
-STYLE_BACKEND_SEARCH_PROVIDER=browser
+STYLE_BACKEND_SEARCH_PROVIDER=taobao_union
 STYLE_BACKEND_IMAGE_PROVIDER=ark
 STYLE_BACKEND_MODEL_PROVIDER=ark
 STYLE_BACKEND_ARK_API_KEY=...
+STYLE_BACKEND_TAOBAO_UNION_APP_KEY=...
+STYLE_BACKEND_TAOBAO_UNION_APP_SECRET=...
+STYLE_BACKEND_TAOBAO_UNION_ADZONE_ID=...
 STYLE_BACKEND_MAX_IMAGE_ATTEMPTS=2
 STYLE_BACKEND_IMAGE_CANDIDATES_PER_ATTEMPT=3
 ```
 
 When Ark credentials are missing, the service falls back to deterministic local
-photo/image providers so the Android app and backend tests can still run. Browser
-search uses Playwright and only treats real marketplace detail pages with usable
-product images as high-trust product data.
+photo/image providers so the Android app and backend tests can still run. Product
+search is provider-based; the production provider is Taobao Union, and future
+sources should implement `ProductSearchProvider` and be registered in the container.
 
 ## PostgreSQL Persistence
 

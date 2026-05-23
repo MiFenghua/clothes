@@ -1,0 +1,95 @@
+<view class="app-page result-page">
+  <view class="topbar">
+    <button class="nav-icon" bindtap="goBack">‹</button>
+    <text class="topbar-title">今日推荐</text>
+    <view class="top-actions">
+      <button class="nav-icon" bindtap="toggleFavorite">♡</button>
+      <button class="nav-icon" open-type="share">⇧</button>
+    </view>
+  </view>
+
+  <view class="match-panel">
+    <text class="match-label">综合适配度</text>
+    <view class="match-row">
+      <text class="match-score">{{matchScore}}%</text>
+      <text class="match-copy">{{result.outfit.title || '正在读取搭配结果'}}</text>
+    </view>
+    <view class="match-meter">
+      <view class="match-fill" style="width: {{matchScore}}%;"></view>
+    </view>
+  </view>
+
+  <view class="try-card card">
+    <image wx:if="{{result.tryOnImageUrl}}" class="try-image" src="{{result.tryOnImageUrl}}" mode="aspectFill" />
+    <view wx:else class="try-placeholder">
+      <view class="placeholder-model">
+        <view class="model-hair"></view>
+        <view class="model-face"></view>
+        <view class="model-jacket"></view>
+        <view class="model-top"></view>
+        <view class="model-pants"></view>
+        <view class="model-shoes"></view>
+      </view>
+    </view>
+    <view class="sparkle sparkle-a"></view>
+    <view class="sparkle sparkle-b"></view>
+    <view class="try-tools">
+      <view class="tool-item">
+        <text class="tool-icon">◎</text>
+        <text>换背景</text>
+      </view>
+      <view class="tool-item">
+        <text class="tool-icon">♙</text>
+        <text>换姿势</text>
+      </view>
+      <view class="tool-item">
+        <text class="tool-icon">□</text>
+        <text>3D 预览</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="highlight">
+    <text class="highlight-title">穿搭亮点</text>
+    <text class="highlight-copy">{{result.outfit.reason || 'AI 会根据你的照片特征、场景和预算，只输出一套最适合当前需求的穿搭。'}}</text>
+  </view>
+
+  <view class="buy-row">
+    <button class="primary-button buy-button" bindtap="copyAllLinks">一键复制套装</button>
+    <button class="bag-button" bindtap="copyAllLinks">□</button>
+  </view>
+
+  <view class="detail-card card">
+    <view class="detail-tabs">
+      <view class="detail-tab active">单品（{{itemsCount}}）</view>
+      <view class="detail-tab">套装信息</view>
+    </view>
+
+    <view wx:if="{{result.outfit.items.length}}" class="product-list">
+      <view wx:for="{{result.outfit.items}}" wx:key="productId" class="product-card">
+        <image class="product-image" src="{{item.imageUrl}}" mode="aspectFit" />
+        <view class="product-main">
+          <text class="product-title">{{item.title}}</text>
+          <text class="shop">{{item.shopName || platformMap[item.platform] || item.platform || '外部电商'}}</text>
+          <view class="product-bottom">
+            <text wx:if="{{item.price > 0}}" class="price">¥ {{item.price}}</text>
+            <text wx:else class="price-text">{{item.priceText || '实时价格'}}</text>
+            <button class="buy-link" data-product-id="{{item.productId}}" data-url="{{item.productUrl}}" bindtap="copyLink">去购买 ↗</button>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:else class="empty-products">
+      <text>暂无可展示商品，请稍后重试。</text>
+    </view>
+
+    <view class="more-card">
+      <view>
+        <text class="more-title">更多相似推荐</text>
+        <text class="more-copy">根据你的特征和偏好，发现更多适合你的单品</text>
+      </view>
+      <text class="more-arrow">›</text>
+    </view>
+  </view>
+</view>

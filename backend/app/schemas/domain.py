@@ -75,9 +75,6 @@ class StyleTaskRequest(BaseModel):
         default_factory=lambda: [
             Marketplace.taobao,
             Marketplace.tmall,
-            Marketplace.jd,
-            Marketplace.pdd,
-            Marketplace.amazon,
         ]
     )
 
@@ -116,6 +113,7 @@ class PreferenceConstraints(BaseModel):
 class ProductCandidate(BaseModel):
     product_id: str
     marketplace: Marketplace
+    source_provider: str | None = None
     category: ProductCategory
     title: str
     price: float = Field(ge=0)
@@ -161,4 +159,3 @@ class WardrobeItem(BaseModel):
     style_tags: list[str] = Field(default_factory=list)
     fit_tags: list[str] = Field(default_factory=list)
     notes: str | None = None
-

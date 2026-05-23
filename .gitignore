@@ -4,6 +4,7 @@ dist/
 .idea/
 .superpowers/
 artifacts/
+storage/
 server/storage/uploads/*
 server/storage/generated/*
 server/storage/auth-store.json
