@@ -13,6 +13,18 @@ docs/       Specs and implementation plans
 
 ## Python Backend
 
+Create a backend-local env file from the root example before running FastAPI from `backend/`:
+
+```powershell
+Copy-Item .env.example backend/.env
+```
+
+Or on macOS/Linux:
+
+```bash
+cp .env.example backend/.env
+```
+
 Start the backend:
 
 ```bash
@@ -27,7 +39,7 @@ Useful local URLs:
 - Health check: `http://127.0.0.1:8000/health`
 - Uploaded/generated objects: `http://127.0.0.1:8000/objects/...`
 
-Production-like provider configuration is controlled with `STYLE_BACKEND_*` environment variables. Copy `.env.example` to `.env` and set at least:
+Production-like provider configuration is controlled with `STYLE_BACKEND_*` environment variables in `backend/.env`. Set at least:
 
 ```env
 STYLE_BACKEND_SEARCH_PROVIDER=taobao_union
