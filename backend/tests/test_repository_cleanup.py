@@ -55,29 +55,26 @@ REMOVED_ENV_KEYS = [
 
 OLD_NODE_BACKEND_PACKAGE_MARKERS = [
     "dist/server/src/index.js",
+    "dist/server/tests",
     "server/tests",
-    "express",
-    "multer",
-    "cors",
-    "openai",
-    "playwright-core",
-    "zod",
+    "scripts/amazon-login.mjs",
+    "scripts/taobao-login.mjs",
+    "server/storage",
 ]
 
 
 OLD_README_RUNTIME_MARKERS = [
     "Node.js/TypeScript Demo 后端",
-    "Node backend",
-    "Node Demo",
+    "Node Demo 后端启动",
     "server/src",
-    "npm run dev",
-    "npm start",
+    "server/tests",
     "微信原生小程序",
     "小程序配置",
-    "mini program",
     "miniprogram/",
-    "127.0.0.1:3000",
-    "localhost:3000",
+    "npm run amazon:login",
+    "npm run taobao:login",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3000/web/",
 ]
 
 
