@@ -117,24 +117,26 @@ class ArkSeedreamImageProvider:
         count: int,
     ) -> list[ImageCandidate]:
         references = self._reference_images(request, outfit)
-        candidates: list[ImageCandidate] = []
-        for index in range(count):
-            response = await asyncio.to_thread(
-                self.client.images.generate,
-                model=self.settings.ark_image_model,
-                prompt=self._prompt(prompt, attempt=attempt, index=index),
-                size=self.settings.ark_image_size,  # type: ignore[arg-type]
-                response_format="url",  # type: ignore[arg-type]
-                extra_body={
-                    "image": references,
-                    "watermark": self.settings.ark_watermark,
-                },
-            )
-            image_url = response.data[0].url if response.data else None
-            if not image_url:
-                raise RuntimeError("Ark Seedream did not return an image URL")
-            candidates.append(
-                ImageCandidate(
+        concurrency = max(1, min(count, self.settings.image_generation_concurrency))
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def generate_one(index: int) -> ImageCandidate:
+            async with semaphore:
+                response = await asyncio.to_thread(
+                    self.client.images.generate,
+                    model=self.settings.ark_image_model,
+                    prompt=self._prompt(prompt, attempt=attempt, index=index),
+                    size=self.settings.ark_image_size,  # type: ignore[arg-type]
+                    response_format="url",  # type: ignore[arg-type]
+                    extra_body={
+                        "image": references,
+                        "watermark": self.settings.ark_watermark,
+                    },
+                )
+                image_url = response.data[0].url if response.data else None
+                if not image_url:
+                    raise RuntimeError("Ark Seedream did not return an image URL")
+                return ImageCandidate(
                     candidate_id=f"{task_id}_ark_{attempt}_{index}",
                     image_url=image_url,
                     prompt=prompt,
@@ -142,8 +144,8 @@ class ArkSeedreamImageProvider:
                     attempt=attempt,
                     metadata={},
                 )
-            )
-        return candidates
+
+        return list(await asyncio.gather(*(generate_one(index) for index in range(count))))
 
     def _reference_images(self, request: StyleTaskRequest, outfit: OutfitCandidate) -> list[str]:
         local_path = self.settings.storage_dir / request.photo_object_key

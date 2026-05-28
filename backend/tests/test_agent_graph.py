@@ -5,12 +5,16 @@ import unittest
 from app.agents.graph import StyleAgentGraph
 from app.config import Settings
 from app.providers.image import LocalTryOnImageProvider, TryOnImageProvider
-from app.providers.search import LocalDemoSearchProvider
+from app.providers.outfit_planner import ModelOutfitCandidatePlan, ModelOutfitItemPlan
+from app.providers.query_planner import ProductSearchPlan
 from app.providers.tracing import InMemoryTraceRecorder
 from app.schemas.domain import (
     Budget,
     Marketplace,
+    OutfitCandidate,
+    OutfitItem,
     PhotoQuality,
+    PreferenceConstraints,
     ProductCandidate,
     ProductCategory,
     Scene,
@@ -27,11 +31,37 @@ def request(**overrides) -> StyleTaskRequest:
         "photo_url": "https://example.com/person.jpg",
         "photo_object_key": "uploads/person.jpg",
         "budget": Budget(min=300, max=900),
-        "preferences": StylePreferences(liked_style="干净,显比例", avoid=None, height_cm=165, usual_size="M"),
+        "preferences": StylePreferences(liked_style="clean, proportion", avoid=None, height_cm=165, usual_size="M"),
         "marketplaces": [Marketplace.taobao, Marketplace.tmall],
     }
     base.update(overrides)
     return StyleTaskRequest(**base)
+
+
+def default_plans() -> list[ProductSearchPlan]:
+    return [
+        ProductSearchPlan(
+            query="model selected short top",
+            category=ProductCategory.top,
+            colors=["ivory"],
+            style_tags=["clean"],
+            fit_tags=["short"],
+        ),
+        ProductSearchPlan(
+            query="model selected high waist pants",
+            category=ProductCategory.bottom,
+            colors=["denim"],
+            style_tags=["clean"],
+            fit_tags=["high waist"],
+        ),
+        ProductSearchPlan(
+            query="model selected simple shoes",
+            category=ProductCategory.shoes,
+            colors=["black"],
+            style_tags=["simple"],
+            fit_tags=["comfortable"],
+        ),
+    ]
 
 
 class LowQualityImageProvider(TryOnImageProvider):
@@ -54,34 +84,25 @@ class LowQualityImageProvider(TryOnImageProvider):
         ]
 
 
-class AvoidConflictSearchProvider(LocalDemoSearchProvider):
-    async def search(self, *, query, marketplaces, budget, limit):
-        products = await super().search(query=query, marketplaces=marketplaces, budget=budget, limit=limit)
-        return [product.model_copy(update={"title": f"{product.title} 荧光色"}) for product in products]
-
-
-class EmptySearchProvider(LocalDemoSearchProvider):
-    async def search(self, *, query, marketplaces, budget, limit):
-        return []
-
-
-class MissingBagSearchProvider(LocalDemoSearchProvider):
-    async def search(self, *, query, marketplaces, budget, limit):
-        products = await super().search(query=query, marketplaces=marketplaces, budget=budget, limit=limit)
-        if products and products[0].category == ProductCategory.bag:
-            return []
-        return products
-
-
-class FakeModelQueryPlanner:
-    source = "fake_model"
-
-    async def build_queries(self, *, request, profile, constraints):
-        return [
-            "women cropped top clean waist ivory",
-            "women high waist pants clean denim",
-            "women low heel shoes clean black",
-        ]
+class GoodPhotoProfileProvider:
+    async def analyze(self, *, task_id, request):
+        return StyleProfile(
+            body_proportion="balanced",
+            undertone="neutral",
+            hair_tone="dark",
+            style_signals=["model clean"],
+            fit_advice=["model high waist"],
+            palette=["ivory", "denim", "black"],
+            photo_quality=PhotoQuality(
+                is_full_body=True,
+                face_visible=True,
+                lighting="good",
+                occlusion="low",
+                resolution_score=0.9,
+            ),
+            confidence=0.9,
+            summary="Model profile is usable.",
+        )
 
 
 class BadPhotoProfileProvider:
@@ -90,8 +111,8 @@ class BadPhotoProfileProvider:
             body_proportion="balanced",
             undertone="neutral",
             hair_tone="dark",
-            style_signals=["干净"],
-            fit_advice=["高腰线"],
+            style_signals=["clean"],
+            fit_advice=["high waist"],
             palette=["ivory", "black"],
             photo_quality=PhotoQuality(
                 is_full_body=False,
@@ -101,19 +122,149 @@ class BadPhotoProfileProvider:
                 resolution_score=0.3,
             ),
             confidence=0.4,
-            summary="照片质量不足。",
+            summary="Photo quality is not usable.",
         )
+
+
+class StaticQueryPlanner:
+    source = "fake_model"
+
+    def __init__(self, plans: list[ProductSearchPlan] | None = None) -> None:
+        self.plans = plans or default_plans()
+
+    async def build_queries(self, *, request, profile, constraints):
+        return self.plans
+
+
+class CatalogSearchProvider:
+    source_id = "catalog_test"
+
+    def __init__(self, empty: bool = False) -> None:
+        self.empty = empty
+        self.calls: list[dict] = []
+
+    async def search(
+        self,
+        *,
+        query,
+        category,
+        colors,
+        style_tags,
+        fit_tags,
+        marketplaces,
+        budget,
+        limit,
+    ):
+        self.calls.append(
+            {
+                "query": query,
+                "category": category,
+                "colors": colors,
+                "style_tags": style_tags,
+                "fit_tags": fit_tags,
+            }
+        )
+        if self.empty:
+            return []
+        marketplace = marketplaces[0] if marketplaces else Marketplace.taobao
+        product_id = f"{category.value}_{len(self.calls)}"
+        return [
+            ProductCandidate(
+                product_id=product_id,
+                marketplace=marketplace,
+                source_provider=self.source_id,
+                category=category,
+                title=f"{query} marketplace title",
+                price=199,
+                price_text="199",
+                image_url=f"https://img.alicdn.com/{product_id}.jpg",
+                product_url=f"https://s.click.taobao.com/{product_id}",
+                shop_name="Test shop",
+                sizes=["S", "M", "L"],
+                colors=colors,
+                style_tags=style_tags,
+                fit_tags=fit_tags,
+                source_reliability=0.95,
+                score=0.93,
+            )
+        ]
+
+
+class ModelOutfitPlanner:
+    source = "fake_outfit_model"
+
+    def __init__(
+        self,
+        categories: list[ProductCategory] | None = None,
+        *,
+        score: float = 0.91,
+        include_empty_plan: bool = False,
+    ) -> None:
+        self.categories = categories or [ProductCategory.top, ProductCategory.bottom, ProductCategory.shoes]
+        self.score = score
+        self.include_empty_plan = include_empty_plan
+
+    async def build_outfits(self, *, request, profile, constraints, products):
+        if self.include_empty_plan:
+            return []
+        selected: list[ProductCandidate] = []
+        for category in self.categories:
+            match = next((product for product in products if product.category == category), None)
+            if match is not None:
+                selected.append(match)
+        if len(selected) != len(self.categories):
+            return []
+        return [
+            ModelOutfitCandidatePlan(
+                title="Model selected outfit",
+                items=[
+                    ModelOutfitItemPlan(
+                        product_id=product.product_id,
+                        selection_reason="Model selected this item for the outfit.",
+                        match_reason="Model says this item fits the user and scene.",
+                        selection_scores={"model": self.score},
+                    )
+                    for product in selected
+                ],
+                score=self.score,
+                score_breakdown={
+                    "fit": self.score,
+                    "color": self.score,
+                    "scene": self.score,
+                    "budget": self.score,
+                    "product_quality": self.score,
+                },
+                why_this_works=["Model reason one.", "Model reason two."],
+            )
+        ]
+
+
+def graph_with_model_chain(
+    *,
+    tracer: InMemoryTraceRecorder,
+    search_provider: CatalogSearchProvider | None = None,
+    image_provider: TryOnImageProvider | None = None,
+    photo_provider=None,
+    query_planner: StaticQueryPlanner | None = None,
+    outfit_planner: ModelOutfitPlanner | None = None,
+    wardrobe_products=None,
+) -> StyleAgentGraph:
+    return StyleAgentGraph(
+        settings=Settings(),
+        tracer=tracer,
+        search_provider=search_provider or CatalogSearchProvider(),
+        image_provider=image_provider or LocalTryOnImageProvider(),
+        photo_provider=photo_provider or GoodPhotoProfileProvider(),
+        query_planner=query_planner or StaticQueryPlanner(),
+        outfit_planner=outfit_planner or ModelOutfitPlanner(),
+        wardrobe_products=wardrobe_products,
+    )
 
 
 class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
     async def test_graph_returns_success_when_recommendation_and_image_pass(self) -> None:
         tracer = InMemoryTraceRecorder()
-        graph = StyleAgentGraph(
-            settings=Settings(),
-            tracer=tracer,
-            search_provider=LocalDemoSearchProvider(),
-            image_provider=LocalTryOnImageProvider(),
-        )
+        graph = graph_with_model_chain(tracer=tracer)
 
         result = await graph.run(task_id="task_success", request=request())
 
@@ -124,99 +275,108 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(result.image_quality_report.overall_score, 0.84)
         self.assertGreater(len(tracer.by_task("task_success")), 5)
 
-    async def test_avoid_term_rejects_hard_selling_bad_outfit(self) -> None:
+    async def test_low_quality_images_return_partial_result_with_best_tryon_candidate(self) -> None:
         tracer = InMemoryTraceRecorder()
-        graph = StyleAgentGraph(
-            settings=Settings(),
-            tracer=tracer,
-            search_provider=AvoidConflictSearchProvider(),
-            image_provider=LocalTryOnImageProvider(),
-        )
-
-        result = await graph.run(
-            task_id="task_avoid",
-            request=request(preferences=StylePreferences(liked_style="干净", avoid="荧光色")),
-        )
-
-        self.assertEqual(result.status, TaskStatus.failed)
-        self.assertIn("宁缺毋滥", result.user_message)
-        self.assertIsNone(result.try_on_image_url)
-
-    async def test_low_quality_images_return_partial_result_without_tryon_image(self) -> None:
-        tracer = InMemoryTraceRecorder()
-        graph = StyleAgentGraph(
-            settings=Settings(),
-            tracer=tracer,
-            search_provider=LocalDemoSearchProvider(),
-            image_provider=LowQualityImageProvider(),
-        )
+        graph = graph_with_model_chain(tracer=tracer, image_provider=LowQualityImageProvider())
 
         result = await graph.run(task_id="task_partial", request=request())
 
         self.assertEqual(result.status, TaskStatus.partial_succeeded)
         self.assertIsNotNone(result.outfit)
-        self.assertIsNone(result.try_on_image_url)
+        self.assertEqual(result.try_on_image_url, "https://generated.example.com/task_partial/bad-0-0.png")
         self.assertIsNotNone(result.image_quality_report)
         self.assertFalse(result.image_quality_report.accepted)
 
     async def test_bad_photo_quality_blocks_before_product_search(self) -> None:
         tracer = InMemoryTraceRecorder()
-        graph = StyleAgentGraph(
-            settings=Settings(),
+        search_provider = CatalogSearchProvider()
+        graph = graph_with_model_chain(
             tracer=tracer,
-            search_provider=LocalDemoSearchProvider(),
-            image_provider=LocalTryOnImageProvider(),
+            search_provider=search_provider,
             photo_provider=BadPhotoProfileProvider(),
         )
 
         result = await graph.run(task_id="task_bad_photo", request=request())
 
         self.assertEqual(result.status, TaskStatus.failed)
-        self.assertIn("照片质量不足", result.user_message)
         self.assertIsNone(result.outfit)
+        self.assertEqual(search_provider.calls, [])
 
-    async def test_empty_product_data_fails_recommendation_gate(self) -> None:
+    async def test_empty_product_data_surfaces_model_composition_exception(self) -> None:
         tracer = InMemoryTraceRecorder()
-        graph = StyleAgentGraph(
-            settings=Settings(),
+        graph = graph_with_model_chain(tracer=tracer, search_provider=CatalogSearchProvider(empty=True))
+
+        with self.assertRaisesRegex(RuntimeError, "没有可供模型选择的商品"):
+            await graph.run(task_id="task_empty_products", request=request())
+
+    async def test_model_can_return_no_outfit_and_director_reports_failure(self) -> None:
+        tracer = InMemoryTraceRecorder()
+        graph = graph_with_model_chain(
             tracer=tracer,
-            search_provider=EmptySearchProvider(),
-            image_provider=LocalTryOnImageProvider(),
+            outfit_planner=ModelOutfitPlanner(include_empty_plan=True),
         )
 
-        result = await graph.run(task_id="task_empty_products", request=request())
+        result = await graph.run(task_id="task_no_model_outfit", request=request())
 
         self.assertEqual(result.status, TaskStatus.failed)
-        self.assertIn("没有足够可信的商品", result.user_message)
         self.assertIsNone(result.try_on_image_url)
 
-    async def test_missing_optional_bag_still_builds_core_outfit(self) -> None:
-        tracer = InMemoryTraceRecorder()
-        graph = StyleAgentGraph(
-            settings=Settings(),
-            tracer=tracer,
-            search_provider=MissingBagSearchProvider(),
-            image_provider=LocalTryOnImageProvider(),
+    async def test_fit_critic_preserves_model_scores_without_term_matching(self) -> None:
+        from app.agents.fit_critic import FitCriticAgent
+        from app.agents.state import StyleGraphState
+
+        item = OutfitItem(
+            product_id="model_item",
+            marketplace=Marketplace.taobao,
+            source_provider="test",
+            category=ProductCategory.top,
+            title="fixture title without preferred terms",
+            price=129,
+            price_text="129",
+            image_url="https://img.alicdn.com/item.jpg",
+            product_url="https://s.click.taobao.com/t",
+            sizes=["S", "M", "L"],
+            colors=["model-color"],
+            style_tags=["model-style"],
+            fit_tags=["model-fit"],
+            source_reliability=0.94,
+            score=0.94,
+            selection_reason="Model selected this item.",
+            match_reason="Model says this item matches.",
+            selection_scores={"model": 0.94},
+        )
+        candidate = OutfitCandidate(
+            candidate_id="outfit_model_score",
+            title="Model scored outfit",
+            items=[item],
+            total_price=129,
+            score=0.51,
+            score_breakdown={"fit": 0.51},
+            why_this_works=["Model reason one.", "Model reason two."],
+        )
+        state = StyleGraphState(
+            task_id="task_fit_no_terms",
+            request=request(),
+            constraints=PreferenceConstraints(
+                scene=Scene.daily,
+                budget=Budget(min=300, max=900),
+                positive_style_terms=["unmatched preference"],
+                negative_style_terms=[],
+                required_fit_terms=["unmatched fit"],
+                palette=["unmatched color"],
+                marketplaces=[Marketplace.taobao, Marketplace.tmall],
+            ),
+            outfit_candidates=[candidate],
         )
 
-        result = await graph.run(task_id="task_missing_bag", request=request())
+        reviewed = await FitCriticAgent(InMemoryTraceRecorder(), threshold=0.82).run(state)
 
-        self.assertEqual(result.status, TaskStatus.succeeded)
-        self.assertIsNotNone(result.outfit)
-        categories = {item.category for item in result.outfit.items}
-        self.assertIn(ProductCategory.top, categories)
-        self.assertIn(ProductCategory.bottom, categories)
-        self.assertNotIn(ProductCategory.bag, categories)
+        self.assertEqual(reviewed.outfit_candidates[0].score, 0.51)
 
     async def test_search_queries_can_come_from_model_planner(self) -> None:
         tracer = InMemoryTraceRecorder()
-        graph = StyleAgentGraph(
-            settings=Settings(),
-            tracer=tracer,
-            search_provider=LocalDemoSearchProvider(),
-            image_provider=LocalTryOnImageProvider(),
-            query_planner=FakeModelQueryPlanner(),
-        )
+        search_provider = CatalogSearchProvider()
+        graph = graph_with_model_chain(tracer=tracer, search_provider=search_provider)
 
         result = await graph.run(task_id="task_model_queries", request=request())
 
@@ -225,31 +385,22 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
             event for event in tracer.by_task("task_model_queries") if event["node"] == "ProductScoutAgent"
         )
         self.assertEqual(scout_event["payload"]["query_source"], "fake_model")
-        self.assertEqual(
-            scout_event["payload"]["queries"],
-            [
-                "women cropped top clean waist ivory",
-                "women high waist pants clean denim",
-                "women low heel shoes clean black",
-            ],
-        )
+        self.assertEqual(scout_event["payload"]["queries"], [plan.model_dump() for plan in default_plans()])
+        self.assertEqual(search_provider.calls[0]["category"], ProductCategory.top)
+        self.assertEqual(search_provider.calls[0]["fit_tags"], ["short"])
 
     async def test_retry_image_reuses_approved_outfit_without_recommendation_search(self) -> None:
         tracer = InMemoryTraceRecorder()
-        graph = StyleAgentGraph(
-            settings=Settings(),
-            tracer=tracer,
-            search_provider=LocalDemoSearchProvider(),
-            image_provider=LowQualityImageProvider(),
-        )
-        partial = await graph.run(task_id="task_retry_source", request=request())
+        partial_graph = graph_with_model_chain(tracer=tracer, image_provider=LowQualityImageProvider())
+        partial = await partial_graph.run(task_id="task_retry_source", request=request())
         self.assertEqual(partial.status, TaskStatus.partial_succeeded)
         self.assertIsNotNone(partial.outfit)
 
+        retry_search_provider = CatalogSearchProvider(empty=True)
         retry_graph = StyleAgentGraph(
             settings=Settings(),
             tracer=tracer,
-            search_provider=EmptySearchProvider(),
+            search_provider=retry_search_provider,
             image_provider=LocalTryOnImageProvider(),
         )
         retried = await retry_graph.retry_image(
@@ -262,29 +413,30 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(retried.status, TaskStatus.succeeded)
         self.assertIsNotNone(retried.try_on_image_url)
+        self.assertEqual(retry_search_provider.calls, [])
 
-    async def test_wardrobe_items_are_added_to_product_pool(self) -> None:
+    async def test_wardrobe_items_are_added_to_product_pool_for_model_selection(self) -> None:
         tracer = InMemoryTraceRecorder()
         owned_outerwear = ProductCandidate(
             product_id="wardrobe_coat_1",
             marketplace=Marketplace.owned,
             category=ProductCategory.outerwear,
-            title="米色西装外套",
+            title="Owned ivory blazer",
             price=0,
-            price_text="衣橱已有",
+            price_text="owned",
             image_url="https://example.com/owned-coat.png",
             product_url="owned://wardrobe/wardrobe_coat_1",
             colors=["ivory"],
-            style_tags=["通勤", "干净"],
-            fit_tags=["利落"],
+            style_tags=["commute", "clean"],
+            fit_tags=["structured"],
             source_reliability=0.94,
             score=0.99,
         )
-        graph = StyleAgentGraph(
-            settings=Settings(),
+        graph = graph_with_model_chain(
             tracer=tracer,
-            search_provider=LocalDemoSearchProvider(),
-            image_provider=LocalTryOnImageProvider(),
+            outfit_planner=ModelOutfitPlanner(
+                [ProductCategory.outerwear, ProductCategory.top, ProductCategory.bottom, ProductCategory.shoes]
+            ),
             wardrobe_products=lambda ids: [owned_outerwear] if "wardrobe_coat_1" in ids else [],
         )
 

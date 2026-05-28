@@ -16,11 +16,9 @@ class ProductNormalizerAgent:
             raise ValueError("Preference constraints are required before product normalization")
         normalized = []
         for product in state.raw_products:
+            # Invariant: avoid/style suitability is decided by model outputs. Normalization
+            # only applies source-data quality signals and carries provider/model risks through.
             risk_flags = list(product.risk_flags)
-            title_blob = " ".join([product.title, *product.style_tags, *product.fit_tags]).lower()
-            for avoid in state.constraints.negative_style_terms:
-                if avoid and avoid.lower() in title_blob:
-                    risk_flags.append(f"severe:命中避雷项:{avoid}")
             report = data_gate_for_product(product)
             score = product.score * 0.55 + product.source_reliability * 0.25 + report.score * 0.2
             if risk_flags:
@@ -42,4 +40,3 @@ class ProductNormalizerAgent:
             {"input_count": len(state.raw_products), "output_count": len(normalized)},
         )
         return state.model_copy(update={"normalized_products": normalized})
-

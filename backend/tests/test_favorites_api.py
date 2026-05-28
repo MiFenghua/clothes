@@ -101,7 +101,7 @@ def favorites_client(tmp_path, monkeypatch) -> tuple[TestClient, FakeGoogleVerif
     monkeypatch.setenv("STYLE_BACKEND_AUTH_STORE_PATH", str(tmp_path / "auth-store.json"))
     monkeypatch.setenv("STYLE_BACKEND_PRODUCT_STORE_PATH", str(tmp_path / "product-store.json"))
     monkeypatch.setenv("STYLE_BACKEND_SEARCH_PROVIDER", "local_demo")
-    monkeypatch.delenv("STYLE_BACKEND_POSTGRES_DSN", raising=False)
+    monkeypatch.setenv("STYLE_BACKEND_POSTGRES_DSN", "memory")
     get_settings.cache_clear()
     get_container.cache_clear()
 

@@ -5,7 +5,7 @@ from typing import Protocol
 from pydantic import BaseModel, Field
 
 from app.config import Settings
-from app.schemas.domain import PreferenceConstraints, ProductCategory, Scene, StyleProfile, StyleTaskRequest
+from app.schemas.domain import PreferenceConstraints, ProductCategory, StyleProfile, StyleTaskRequest
 
 
 class SearchQueryPlanner(Protocol):
@@ -17,52 +17,20 @@ class SearchQueryPlanner(Protocol):
         request: StyleTaskRequest,
         profile: StyleProfile,
         constraints: PreferenceConstraints,
-    ) -> list[str]:
+    ) -> list["ProductSearchPlan"]:
         ...
 
 
+class ProductSearchPlan(BaseModel):
+    query: str = Field(min_length=1, max_length=120)
+    category: ProductCategory
+    colors: list[str] = Field(default_factory=list)
+    style_tags: list[str] = Field(default_factory=list)
+    fit_tags: list[str] = Field(default_factory=list)
+
+
 class SearchQueryPlan(BaseModel):
-    queries: list[str] = Field(default_factory=list, min_length=2, max_length=6)
-
-
-class LocalSearchQueryPlanner:
-    """Deterministic fallback used only when no production model planner is configured."""
-
-    source = "local_fallback"
-
-    async def build_queries(
-        self,
-        *,
-        request: StyleTaskRequest,
-        profile: StyleProfile,
-        constraints: PreferenceConstraints,
-    ) -> list[str]:
-        style = " ".join(constraints.positive_style_terms[:3])
-        fit = " ".join(constraints.required_fit_terms[:2])
-        palette = " ".join(constraints.palette[:2])
-        scene_words = {
-            Scene.daily: ["short top women daily", "high waist straight pants women daily", "low heel shoes women", "small bag women"],
-            Scene.commute: ["shirt women office", "high waist tailored pants women", "light jacket women office", "low heel shoes women"],
-            Scene.date: ["waist defining dress women date", "low heel shoes women soft", "small square bag women"],
-            Scene.travel: ["photogenic top women travel", "high waist casual pants women travel", "comfortable flat shoes women", "light crossbody bag women"],
-            Scene.party: ["statement top women party", "high waist skirt women party", "low heel shoes women elegant", "necklace women elegant"],
-        }[constraints.scene]
-        queries = [f"{query} {style} {fit} {palette}".strip() for query in scene_words]
-        if not any(self._category_hint(query) == ProductCategory.shoes for query in queries):
-            queries.append(f"low heel shoes women {style} versatile".strip())
-        return queries[:5]
-
-    def _category_hint(self, query: str) -> ProductCategory:
-        lowered = query.lower()
-        if "shoe" in lowered or "flat" in lowered or "heel" in lowered:
-            return ProductCategory.shoes
-        if "pants" in lowered or "skirt" in lowered:
-            return ProductCategory.bottom
-        if "bag" in lowered:
-            return ProductCategory.bag
-        if "dress" in lowered:
-            return ProductCategory.dress
-        return ProductCategory.top
+    queries: list[ProductSearchPlan] = Field(default_factory=list, min_length=2, max_length=6)
 
 
 class ArkSearchQueryPlanner:
@@ -79,10 +47,10 @@ class ArkSearchQueryPlanner:
         request: StyleTaskRequest,
         profile: StyleProfile,
         constraints: PreferenceConstraints,
-    ) -> list[str]:
+    ) -> list[ProductSearchPlan]:
         payload = await self.vision.create_json(prompt=self._prompt(request, profile, constraints), image_urls=[])
         plan = SearchQueryPlan.model_validate(payload)
-        queries = [query.strip() for query in plan.queries if query and query.strip()]
+        queries = [query for query in plan.queries if query.query.strip()]
         if len(queries) < 2:
             raise RuntimeError("Ark query planner returned too few search queries")
         return queries[:6]
@@ -100,11 +68,21 @@ Do not use fixed templates. Do not invent attributes that are not supported by t
 
 Return strict JSON only:
 {{
-  "queries": ["2-6 concise ecommerce search queries"]
+  "queries": [
+    {{
+      "query": "concrete Chinese ecommerce search phrase",
+      "category": "top | bottom | dress | outerwear | shoes | bag | accessory",
+      "colors": ["model extracted color terms"],
+      "style_tags": ["model extracted style terms"],
+      "fit_tags": ["model extracted fit terms"]
+    }}
+  ]
 }}
 
 Rules:
-- Each query must be a Chinese ecommerce search phrase.
+- Each query object must be directly derived from the model-extracted profile and user input.
+- Do not rely on backend category inference; provide the category explicitly.
+- For Taobao Union, only use categories supported by the configured category table: top, bottom, dress, outerwear, shoes, bag, accessory.
 - Each query must include one concrete product category term and 1-3 model/user extracted terms.
 - Cover enough categories for an outfit: top+bottom plus shoes or bag, or dress plus shoes or bag.
 - Prefer real marketplace language suitable for Taobao/Tmall and Taobao Union material search.

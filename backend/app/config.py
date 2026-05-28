@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     image_threshold: float = 0.84
     max_image_attempts: int = 2
     image_candidates_per_attempt: int = 3
+    image_generation_concurrency: int = 3
+    image_quality_concurrency: int = 3
     ark_api_key: str | None = None
     ark_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
     ark_vision_model: str = "doubao-seed-1-6-vision-250815"
@@ -45,7 +47,7 @@ class Settings(BaseSettings):
     taobao_union_app_secret: str | None = None
     taobao_union_adzone_id: str | None = None
     taobao_union_site_id: str | None = None
-    taobao_union_material_id: int = 6708
+    taobao_union_material_id: int = 80309
     taobao_union_sign_method: str = "md5"
     taobao_union_timeout_seconds: int = 15
 

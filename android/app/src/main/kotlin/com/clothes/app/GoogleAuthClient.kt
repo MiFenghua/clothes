@@ -49,7 +49,7 @@ internal fun googleSignInFailureMessage(error: Throwable): String {
         message.contains("No matching credentials", ignoreCase = true) ||
         message.contains("no credentials", ignoreCase = true)
     ) {
-        "当前手机资料没有可用于 Google 登录的账号。请使用普通应用图标打开，或在当前双开/安全文件夹中添加 Google 账号。"
+        "未能获取 Google 登录凭据。请确认当前手机资料已添加 Google 账号，并检查 Google Play 服务网络/VPN 是否可访问 Google。"
     } else {
         message.ifBlank { "Google 登录失败" }
     }

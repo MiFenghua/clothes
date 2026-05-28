@@ -7,6 +7,11 @@ const parseBoolean = (value: string | undefined, fallback: boolean) => {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 };
 
+const optionalEnv = (value: string | undefined) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+};
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   publicBaseUrl: process.env.PUBLIC_BASE_URL ?? "http://127.0.0.1:3000",
@@ -16,7 +21,7 @@ export const config = {
   amazonChromePath: process.env.AMAZON_CHROME_PATH ?? process.env.TAOBAO_CHROME_PATH ?? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   amazonUserDataDir: process.env.AMAZON_USER_DATA_DIR ?? "server/storage/amazon-browser-profile",
   amazonMarketplaceBaseUrl: process.env.AMAZON_MARKETPLACE_BASE_URL ?? "https://www.amazon.com",
-  amazonSearchUrlTemplate: process.env.AMAZON_SEARCH_URL_TEMPLATE,
+  amazonSearchUrlTemplate: optionalEnv(process.env.AMAZON_SEARCH_URL_TEMPLATE),
   amazonSearchTimeoutMs: Number(process.env.AMAZON_SEARCH_TIMEOUT_MS ?? 30000),
   taobaoBrowserEnabled: parseBoolean(process.env.TAOBAO_BROWSER_ENABLED, true),
   taobaoHeadless: parseBoolean(process.env.TAOBAO_HEADLESS, true),
@@ -32,14 +37,15 @@ export const config = {
   authSessionCookieName: process.env.AUTH_SESSION_COOKIE_NAME ?? "clothes_session",
   authSessionMaxAgeDays: Number(process.env.AUTH_SESSION_MAX_AGE_DAYS ?? 30),
   googleOAuthStateCookieName: "clothes_google_oauth_state",
-  googleClientId: process.env.GOOGLE_CLIENT_ID,
-  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  googleOAuthRedirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI,
+  // Invariant: optional credentials are configured only when they contain a non-blank value.
+  googleClientId: optionalEnv(process.env.GOOGLE_CLIENT_ID),
+  googleClientSecret: optionalEnv(process.env.GOOGLE_CLIENT_SECRET),
+  googleOAuthRedirectUri: optionalEnv(process.env.GOOGLE_OAUTH_REDIRECT_URI),
   imageProvider: process.env.IMAGE_PROVIDER ?? "ark",
   enableOpenAiImage: parseBoolean(process.env.ENABLE_OPENAI_IMAGE, false),
-  openAiApiKey: process.env.OPENAI_API_KEY,
+  openAiApiKey: optionalEnv(process.env.OPENAI_API_KEY),
   openAiImageModel: process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2",
-  arkApiKey: process.env.ARK_API_KEY,
+  arkApiKey: optionalEnv(process.env.ARK_API_KEY),
   arkBaseUrl: process.env.ARK_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/v3",
   arkImageModel: process.env.ARK_IMAGE_MODEL ?? "doubao-seedream-5-0-260128",
   arkImageSize: process.env.ARK_IMAGE_SIZE ?? "2K",

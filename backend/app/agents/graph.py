@@ -18,6 +18,7 @@ from app.agents.stylist_composer import StylistComposerAgent
 from app.agents.tryon_generator import TryOnGeneratorAgent
 from app.config import Settings
 from app.providers.image import TryOnImageProvider
+from app.providers.outfit_planner import OutfitPlanner
 from app.providers.query_planner import SearchQueryPlanner
 from app.providers.search import ProductSearchProvider
 from app.providers.tracing import TraceRecorder
@@ -51,6 +52,7 @@ class StyleAgentGraph:
         image_provider: TryOnImageProvider,
         photo_provider: PhotoProfileProvider | None = None,
         query_planner: SearchQueryPlanner | None = None,
+        outfit_planner: OutfitPlanner | None = None,
         image_quality_provider: ImageQualityScoringProvider | None = None,
         wardrobe_products: Callable[[list[str]], list[ProductCandidate]] | None = None,
     ) -> None:
@@ -59,7 +61,6 @@ class StyleAgentGraph:
         self.photo_profiler = PhotoProfilerAgent(
             tracer,
             photo_provider,
-            allow_provider_fallback=photo_provider is None,
         )
         self.preference_resolver = PreferenceResolverAgent(tracer)
         self.product_scout = ProductScoutAgent(
@@ -69,7 +70,7 @@ class StyleAgentGraph:
             wardrobe_products=wardrobe_products,
         )
         self.product_normalizer = ProductNormalizerAgent(tracer)
-        self.stylist_composer = StylistComposerAgent(tracer)
+        self.stylist_composer = StylistComposerAgent(tracer, outfit_planner)
         self.fit_critic = FitCriticAgent(tracer, settings.recommendation_threshold)
         self.fashion_director = FashionDirectorAgent(tracer, settings.recommendation_threshold)
         self.image_prompt = ImagePromptAgent(tracer)

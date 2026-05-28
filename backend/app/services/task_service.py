@@ -51,7 +51,7 @@ class TaskService:
             return self.repository.complete(task_id, result)
         except Exception as exc:
             self.tracer.record(task_id, "TaskService", "task_failed", {"error": str(exc)})
-            return self.repository.fail(task_id, "任务执行失败，请稍后重试。")
+            return self.repository.fail(task_id, f"任务执行异常：{exc}")
 
     async def retry_image(self, task_id: str) -> StyleTaskView:
         task = self.repository.get(task_id)
@@ -74,7 +74,7 @@ class TaskService:
             return self.repository.complete(task_id, result)
         except Exception as exc:
             self.tracer.record(task_id, "TaskService", "image_retry_failed", {"error": str(exc)})
-            return self.repository.fail(task_id, "试穿图重新生成失败，请稍后重试。")
+            return self.repository.fail(task_id, f"试穿图重新生成异常：{exc}")
 
     def get_task(self, task_id: str) -> StyleTaskView:
         return self.repository.get(task_id)

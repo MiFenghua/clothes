@@ -4,7 +4,7 @@ from collections import Counter
 from collections.abc import Callable
 
 from app.agents.state import StyleGraphState
-from app.providers.query_planner import LocalSearchQueryPlanner, SearchQueryPlanner
+from app.providers.query_planner import ProductSearchPlan, SearchQueryPlanner
 from app.providers.search import ProductSearchProvider
 from app.providers.tracing import TraceRecorder
 from app.schemas.domain import ProductCandidate
@@ -22,12 +22,14 @@ class ProductScoutAgent:
     ) -> None:
         self.tracer = tracer
         self.search_provider = search_provider
-        self.query_planner = query_planner or LocalSearchQueryPlanner()
+        self.query_planner = query_planner
         self.wardrobe_products = wardrobe_products
 
     async def run(self, state: StyleGraphState) -> StyleGraphState:
         if state.constraints is None or state.profile is None:
             raise ValueError("Profile and preference constraints are required before product scouting")
+        if self.query_planner is None:
+            raise RuntimeError("模型检索计划不可用：未配置搜索关键词模型。")
 
         queries = await self.query_planner.build_queries(
             request=state.request,
@@ -36,10 +38,10 @@ class ProductScoutAgent:
         )
         products: list[ProductCandidate] = []
         query_summaries = []
-        for query in queries:
-            results = await self._search(query, state)
+        for query_plan in queries:
+            results = await self._search(query_plan, state)
             products.extend(results)
-            query_summaries.append(self._query_summary(query, results))
+            query_summaries.append(self._query_summary(query_plan, results))
 
         owned_products = self._wardrobe_products(state.constraints.wardrobe_item_ids)
         products.extend(owned_products)
@@ -51,7 +53,7 @@ class ProductScoutAgent:
             self.node_name,
             "products_scouted",
             {
-                "queries": queries,
+                "queries": [query.model_dump() for query in queries],
                 "query_source": self.query_planner.source,
                 "search_source": getattr(self.search_provider, "source_id", type(self.search_provider).__name__),
                 "query_summaries": query_summaries,
@@ -68,21 +70,25 @@ class ProductScoutAgent:
             return []
         return self.wardrobe_products(item_ids)
 
-    async def _search(self, query: str, state: StyleGraphState) -> list[ProductCandidate]:
+    async def _search(self, query_plan: ProductSearchPlan, state: StyleGraphState) -> list[ProductCandidate]:
         if state.constraints is None:
             raise ValueError("Preference constraints are required before product search")
         return await self.search_provider.search(
-            query=query,
+            query=query_plan.query,
+            category=query_plan.category,
+            colors=query_plan.colors,
+            style_tags=query_plan.style_tags,
+            fit_tags=query_plan.fit_tags,
             marketplaces=state.constraints.marketplaces,
             budget=state.constraints.budget,
             limit=20,
         )
 
-    def _query_summary(self, query: str, products: list[ProductCandidate]) -> dict:
+    def _query_summary(self, query_plan: ProductSearchPlan, products: list[ProductCandidate]) -> dict:
         categories = Counter(product.category.value for product in products)
         marketplaces = Counter(product.marketplace.value for product in products)
         return {
-            "query": query,
+            "query": query_plan.model_dump(),
             "count": len(products),
             "category_counts": dict(categories),
             "marketplace_counts": dict(marketplaces),

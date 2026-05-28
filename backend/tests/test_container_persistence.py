@@ -28,6 +28,7 @@ def clear_container_caches() -> Iterator[None]:
 
 
 def configure_storage_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("STYLE_BACKEND_STORAGE_DIR", str(tmp_path / "storage"))
     monkeypatch.setenv("STYLE_BACKEND_GENERATED_DIR", str(tmp_path / "storage/generated"))
     monkeypatch.setenv("STYLE_BACKEND_UPLOAD_DIR", str(tmp_path / "storage/uploads"))
@@ -43,6 +44,21 @@ def test_container_uses_local_persistence_without_postgres_dsn(
 ) -> None:
     configure_storage_paths(monkeypatch, tmp_path)
     monkeypatch.delenv("STYLE_BACKEND_POSTGRES_DSN", raising=False)
+    get_container.cache_clear()
+    get_settings.cache_clear()
+
+    container = get_container()
+
+    assert isinstance(container.task_service.repository, InMemoryTaskRepository)
+    assert isinstance(container.task_service.wardrobe_repository, InMemoryWardrobeRepository)
+    assert isinstance(container.task_service.favorites_repository, InMemoryFavoritesRepository)
+
+
+def test_container_uses_local_persistence_when_postgres_dsn_is_memory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    configure_storage_paths(monkeypatch, tmp_path)
+    monkeypatch.setenv("STYLE_BACKEND_POSTGRES_DSN", "memory")
     get_container.cache_clear()
     get_settings.cache_clear()
 

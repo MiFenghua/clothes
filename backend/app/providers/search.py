@@ -13,6 +13,11 @@ from urllib.request import Request, urlopen
 from uuid import NAMESPACE_URL, uuid5
 
 from app.config import Settings
+from app.providers.taobao_category_catalog import (
+    TAOBAO_CATEGORY_IDS,
+    taobao_category_filter,
+    taobao_category_match,
+)
 from app.schemas.domain import Budget, Marketplace, ProductCandidate, ProductCategory
 
 
@@ -23,6 +28,10 @@ class ProductSearchProvider(Protocol):
         self,
         *,
         query: str,
+        category: ProductCategory,
+        colors: list[str],
+        style_tags: list[str],
+        fit_tags: list[str],
         marketplaces: list[Marketplace],
         budget: Budget,
         limit: int,
@@ -44,6 +53,10 @@ class CompositeProductSearchProvider:
         self,
         *,
         query: str,
+        category: ProductCategory,
+        colors: list[str],
+        style_tags: list[str],
+        fit_tags: list[str],
         marketplaces: list[Marketplace],
         budget: Budget,
         limit: int,
@@ -54,6 +67,10 @@ class CompositeProductSearchProvider:
             products.extend(
                 await provider.search(
                     query=query,
+                    category=category,
+                    colors=colors,
+                    style_tags=style_tags,
+                    fit_tags=fit_tags,
                     marketplaces=marketplaces,
                     budget=budget,
                     limit=per_source_limit,
@@ -71,11 +88,14 @@ class LocalDemoSearchProvider:
         self,
         *,
         query: str,
+        category: ProductCategory,
+        colors: list[str],
+        style_tags: list[str],
+        fit_tags: list[str],
         marketplaces: list[Marketplace],
         budget: Budget,
         limit: int,
     ) -> list[ProductCandidate]:
-        category = _category_from_query(query)
         products: list[ProductCandidate] = []
         market_pool = marketplaces or [Marketplace.taobao]
         for index in range(limit):
@@ -95,9 +115,9 @@ class LocalDemoSearchProvider:
                     product_url=_detail_url(marketplace, product_id),
                     shop_name=f"{marketplace.value} demo shop",
                     sizes=["S", "M", "L"],
-                    colors=["ivory", "denim", "black"] if category != ProductCategory.shoes else ["black", "cream"],
-                    style_tags=_style_tags(query),
-                    fit_tags=_fit_tags(query),
+                    colors=colors,
+                    style_tags=style_tags,
+                    fit_tags=fit_tags,
                     source_reliability=0.82 if index < 8 else 0.72,
                     score=max(0.55, 0.92 - index * 0.025),
                 )
@@ -128,11 +148,19 @@ class TaobaoUnionProductSearchProvider:
         if missing:
             raise RuntimeError(f"Taobao Union search is not configured: {', '.join(missing)}")
         self.settings = settings
+        self.site_id, self.adzone_id = _normalize_taobao_pid(
+            settings.taobao_union_site_id,
+            settings.taobao_union_adzone_id or "",
+        )
 
     async def search(
         self,
         *,
         query: str,
+        category: ProductCategory,
+        colors: list[str],
+        style_tags: list[str],
+        fit_tags: list[str],
         marketplaces: list[Marketplace],
         budget: Budget,
         limit: int,
@@ -142,17 +170,29 @@ class TaobaoUnionProductSearchProvider:
         if marketplaces and not ({Marketplace.taobao, Marketplace.tmall} & set(marketplaces)):
             return []
 
-        payload = await asyncio.to_thread(self._request, query, budget, limit)
+        payload = await asyncio.to_thread(self._request, query, category, budget, limit)
         rows = _extract_taobao_items(payload)
         products = [
             product
             for index, row in enumerate(rows)
-            if (product := self._to_product(row, query=query, budget=budget, index=index)) is not None
+            if (
+                product := self._to_product(
+                    row,
+                    query=query,
+                    category=category,
+                    colors=colors,
+                    style_tags=style_tags,
+                    fit_tags=fit_tags,
+                    budget=budget,
+                    index=index,
+                )
+            )
+            is not None
         ]
         return _dedupe(products)[:limit]
 
-    def _request(self, query: str, budget: Budget, limit: int) -> dict[str, Any]:
-        params = self._signed_params(query=query, budget=budget, limit=limit)
+    def _request(self, query: str, category: ProductCategory, budget: Budget, limit: int) -> dict[str, Any]:
+        params = self._signed_params(query=query, category=category, budget=budget, limit=limit)
         data = urlencode(params).encode("utf-8")
         request = Request(
             self.settings.taobao_union_endpoint,
@@ -163,7 +203,8 @@ class TaobaoUnionProductSearchProvider:
         with urlopen(request, timeout=self.settings.taobao_union_timeout_seconds) as response:
             return json.loads(response.read().decode("utf-8"))
 
-    def _signed_params(self, *, query: str, budget: Budget, limit: int) -> dict[str, str]:
+    def _signed_params(self, *, query: str, category: ProductCategory, budget: Budget, limit: int) -> dict[str, str]:
+        start_price, end_price = _taobao_item_price_window(category, budget)
         params: dict[str, str] = {
             "method": self.settings.taobao_union_method,
             "app_key": self.settings.taobao_union_app_key or "",
@@ -171,22 +212,25 @@ class TaobaoUnionProductSearchProvider:
             "format": "json",
             "v": "2.0",
             "sign_method": self.settings.taobao_union_sign_method,
-            "adzone_id": str(self.settings.taobao_union_adzone_id),
+            "adzone_id": str(self.adzone_id),
             "q": query,
+            "material_id": str(self.settings.taobao_union_material_id),
+            "cat": _taobao_category_filter(category, query),
             "page_no": "1",
             "page_size": str(max(1, min(limit, 100))),
-            "platform": "1",
-            "has_coupon": "true",
-            "need_free_shipment": "true",
-            "need_prepay": "true",
-            "material_id": str(self.settings.taobao_union_material_id),
+            "sort": "match",
+            "has_coupon": "false",
+            "need_free_shipment": "false",
+            "need_prepay": "false",
+            "include_good_rate": "false",
+            "include_rfd_rate": "false",
         }
-        if self.settings.taobao_union_site_id:
-            params["site_id"] = str(self.settings.taobao_union_site_id)
-        if budget.min is not None:
-            params["start_price"] = str(int(budget.min))
-        if budget.max is not None:
-            params["end_price"] = str(int(budget.max))
+        if self.site_id:
+            params["site_id"] = str(self.site_id)
+        if start_price is not None:
+            params["start_price"] = str(start_price)
+        if end_price is not None:
+            params["end_price"] = str(end_price)
         params["sign"] = self._sign(params)
         return params
 
@@ -203,60 +247,172 @@ class TaobaoUnionProductSearchProvider:
         row: dict[str, Any],
         *,
         query: str,
+        category: ProductCategory,
+        colors: list[str],
+        style_tags: list[str],
+        fit_tags: list[str],
         budget: Budget,
         index: int,
     ) -> ProductCandidate | None:
-        item_id = _first_text(row, "item_id", "num_iid", "itemId")
-        title = html.unescape(_first_text(row, "title", "short_title", "item_description") or "").strip()
-        image_url = _normalize_url(_first_text(row, "pict_url", "pic_url", "white_image", "pictUrl"))
+        item_basic_info = _first_dict(row, "item_basic_info", "itemBasicInfo")
+        price_promotion_info = _first_dict(row, "price_promotion_info", "pricePromotionInfo")
+        publish_info = _first_dict(row, "publish_info", "publishInfo")
+        income_info = _first_dict(publish_info, "income_info", "incomeInfo")
+        scope_info = _first_dict(row, "scope_info", "scopeInfo")
+
+        item_id = _first_text(row, "item_id", "num_iid", "itemId") or _first_text(
+            item_basic_info, "item_id", "num_iid", "itemId"
+        )
+        title = html.unescape(
+            _first_text(row, "title", "short_title", "item_description")
+            or _first_text(item_basic_info, "title", "short_title", "item_description")
+            or ""
+        ).strip()
+        image_url = _normalize_url(
+            _first_text(row, "pict_url", "pic_url", "white_image", "pictUrl")
+            or _first_text(item_basic_info, "pict_url", "pic_url", "white_image", "pictUrl")
+        )
         product_url = _normalize_url(
             _first_text(row, "coupon_click_url", "coupon_share_url", "click_url", "url", "item_url")
+            or _first_text(publish_info, "coupon_click_url", "coupon_share_url", "click_url", "url")
+            or _first_text(item_basic_info, "coupon_click_url", "coupon_share_url", "click_url", "url")
         )
-        detail_url = _normalize_url(_first_text(row, "item_url", "item_url_h5"))
+        detail_url = _normalize_url(
+            _first_text(row, "item_url", "item_url_h5") or _first_text(item_basic_info, "item_url", "item_url_h5")
+        )
         if not product_url and item_id:
             product_url = f"https://item.taobao.com/item.htm?id={item_id}"
         if not title or not image_url or not product_url:
             return None
 
-        price = _price_from_row(row)
+        category_id = _category_value(row, item_basic_info, "category_id", "categoryId")
+        category_name = _category_value(row, item_basic_info, "category_name", "categoryName")
+        level_one_category_id = _category_value(
+            row,
+            item_basic_info,
+            "level_one_category_id",
+            "levelOneCategoryId",
+        )
+        level_one_category_name = _category_value(
+            row,
+            item_basic_info,
+            "level_one_category_name",
+            "levelOneCategoryName",
+        )
+        category_match = taobao_category_match(
+            category=category,
+            category_id=category_id,
+            level_one_category_id=level_one_category_id,
+            category_name=category_name,
+            level_one_category_name=level_one_category_name,
+        )
+        if category_match == "mismatch":
+            return None
+
+        price = _price_from_row(row, price_promotion_info)
         if budget.max is not None and price > budget.max * 1.5:
             return None
         marketplace = _taobao_marketplace(row, product_url, detail_url)
         stable_key = item_id or product_url
-        source_reliability = 0.92 if detail_url or item_id else 0.86
+        if category_match == "exact" and (detail_url or item_id):
+            source_reliability = 0.96
+        elif category_match == "broad" and (detail_url or item_id):
+            source_reliability = 0.92
+        elif detail_url or item_id:
+            source_reliability = 0.88
+        else:
+            source_reliability = 0.82
         return ProductCandidate(
             product_id=f"tbk_{uuid5(NAMESPACE_URL, stable_key).hex[:12]}",
             marketplace=marketplace,
             source_provider=self.source_id,
-            category=_category_from_query(query),
+            category=category,
             title=title[:180],
             price=price,
             price_text=f"¥{price:.2f}" if price else _first_text(row, "zk_final_price", "reserve_price"),
             image_url=image_url,
             product_url=product_url,
-            shop_name=_first_text(row, "shop_title", "nick", "seller_nick") or None,
+            shop_name=_first_text(row, "shop_title", "nick", "seller_nick")
+            or _first_text(item_basic_info, "shop_title", "nick", "seller_nick")
+            or None,
             sizes=["S", "M", "L"],
-            colors=_color_tags(query),
-            style_tags=_style_tags(query),
-            fit_tags=_fit_tags(query),
+            colors=colors,
+            style_tags=style_tags,
+            fit_tags=fit_tags,
             source_reliability=source_reliability,
-            score=_taobao_score(row, source_reliability, index),
+            score=_taobao_score(
+                row,
+                price_promotion_info,
+                item_basic_info,
+                source_reliability,
+                index,
+                query=query,
+                title=title,
+                category_match=category_match,
+                colors=colors,
+                style_tags=style_tags,
+                fit_tags=fit_tags,
+            ),
             raw={
                 "source_provider": self.source_id,
                 "item_id": item_id,
                 "detail_url": detail_url,
                 "promotion_url": product_url,
-                "commission_rate": _first_text(row, "commission_rate"),
-                "coupon_amount": _first_text(row, "coupon_amount"),
-                "volume": _first_text(row, "volume", "biz_30day"),
+                "commission_rate": (
+                    _first_text(row, "commission_rate")
+                    or _first_text(scope_info, "commission_rate")
+                    or _first_text(income_info, "commission_rate")
+                ),
+                "coupon_amount": _first_text(row, "coupon_amount") or _first_text(price_promotion_info, "coupon_amount"),
+                "volume": _first_text(row, "volume", "biz_30day") or _first_text(item_basic_info, "volume", "biz_30day"),
+                "category_id": category_id,
+                "category_name": category_name,
+                "level_one_category_id": level_one_category_id,
+                "level_one_category_name": level_one_category_name,
+                "category_match": category_match,
             },
         )
+
+
+def _normalize_taobao_pid(site_id: str | None, adzone_id: str) -> tuple[str | None, str]:
+    parts = adzone_id.split("_")
+    if adzone_id.startswith("mm_") and len(parts) == 4:
+        return site_id or parts[2], parts[3]
+    return site_id, adzone_id
+
+
+def _taobao_category_filter(category: ProductCategory, query: str) -> str:
+    return taobao_category_filter(category, query)
+
+
+TAOBAO_ITEM_PRICE_RATIOS: dict[ProductCategory, tuple[float, float]] = {
+    ProductCategory.top: (0.08, 0.45),
+    ProductCategory.bottom: (0.10, 0.50),
+    ProductCategory.dress: (0.18, 0.75),
+    ProductCategory.outerwear: (0.18, 0.75),
+    ProductCategory.shoes: (0.10, 0.45),
+    ProductCategory.bag: (0.08, 0.35),
+    ProductCategory.accessory: (0.03, 0.18),
+}
+
+
+def _taobao_item_price_window(category: ProductCategory, budget: Budget) -> tuple[int | None, int | None]:
+    min_ratio, max_ratio = TAOBAO_ITEM_PRICE_RATIOS[category]
+    start_price = int(budget.min * min_ratio) if budget.min is not None else None
+    end_price = int(budget.max * max_ratio) if budget.max is not None else None
+    if start_price is not None:
+        start_price = max(1, start_price)
+    if start_price is not None and end_price is not None:
+        end_price = max(start_price, end_price)
+    return start_price, end_price
 
 
 def _extract_taobao_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     error = payload.get("error_response")
     if isinstance(error, dict):
         message = error.get("sub_msg") or error.get("msg") or "Taobao Union API error"
+        if "\u65e0\u7ed3\u679c" in str(message) or "no result" in str(message).lower():
+            return []
         raise RuntimeError(str(message))
 
     candidate_roots: list[Any] = [payload]
@@ -305,6 +461,14 @@ def _first_text(row: dict[str, Any], *keys: str) -> str:
     return ""
 
 
+def _first_dict(row: dict[str, Any], *keys: str) -> dict[str, Any]:
+    for key in keys:
+        value = row.get(key)
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
 def _normalize_url(value: str) -> str:
     if not value:
         return ""
@@ -318,14 +482,15 @@ def _normalize_url(value: str) -> str:
     return value
 
 
-def _price_from_row(row: dict[str, Any]) -> float:
-    for key in ("final_price", "actual_price", "zk_final_price", "reserve_price"):
-        value = _first_text(row, key)
-        if value:
-            try:
-                return round(float(value), 2)
-            except ValueError:
-                continue
+def _price_from_row(*rows: dict[str, Any]) -> float:
+    for row in rows:
+        for key in ("final_promotion_price", "final_price", "actual_price", "zk_final_price", "reserve_price"):
+            value = _first_text(row, key)
+            if value:
+                try:
+                    return round(float(value), 2)
+                except ValueError:
+                    continue
     return 0.0
 
 
@@ -337,98 +502,46 @@ def _taobao_marketplace(row: dict[str, Any], product_url: str, detail_url: str) 
     return Marketplace.taobao
 
 
-def _taobao_score(row: dict[str, Any], source_reliability: float, index: int) -> float:
-    coupon_bonus = 0.025 if _first_text(row, "coupon_amount", "coupon_info") else 0
-    sales_text = _first_text(row, "volume", "biz_30day", "sales")
+def _taobao_score(
+    row: dict[str, Any],
+    price_promotion_info: dict[str, Any],
+    item_basic_info: dict[str, Any],
+    source_reliability: float,
+    index: int,
+    *,
+    query: str,
+    title: str,
+    category_match: str,
+    colors: list[str],
+    style_tags: list[str],
+    fit_tags: list[str],
+) -> float:
+    coupon_bonus = 0.025 if (
+        _first_text(row, "coupon_amount", "coupon_info") or _first_text(price_promotion_info, "coupon_amount", "coupon_info")
+    ) else 0
+    sales_text = _first_text(row, "volume", "biz_30day", "sales") or _first_text(
+        item_basic_info, "volume", "biz_30day", "sales"
+    )
     sales_bonus = 0.02 if sales_text and sales_text != "0" else 0
-    return max(0.58, min(0.96, source_reliability + coupon_bonus + sales_bonus - index * 0.018))
+    category_bonus = {"exact": 0.05, "broad": 0.015, "unknown": -0.025}.get(category_match, -0.08)
+    text_bonus = _taobao_text_match_bonus(query, title, colors + style_tags + fit_tags)
+    return max(0.58, min(0.98, source_reliability + category_bonus + text_bonus + coupon_bonus + sales_bonus - index * 0.018))
 
 
-def _category_from_query(query: str) -> ProductCategory:
-    lowered = query.lower()
-    checks = [
-        (ProductCategory.dress, ["dress", "连衣裙", "茶歇裙", "针织裙", "one piece"]),
-        (ProductCategory.bottom, ["pants", "trousers", "jeans", "skirt", "裤", "牛仔裤", "西装裤", "半身裙"]),
-        (ProductCategory.outerwear, ["jacket", "coat", "cardigan", "blazer", "外套", "西装", "开衫"]),
-        (ProductCategory.shoes, ["shoe", "shoes", "boots", "flats", "loafers", "heel", "鞋", "单鞋", "乐福"]),
-        (ProductCategory.bag, ["bag", "tote", "crossbody", "包", "托特", "腋下包"]),
-        (ProductCategory.accessory, ["accessory", "necklace", "earring", "项链", "耳环", "配饰"]),
-        (ProductCategory.top, ["top", "shirt", "blouse", "tee", "上衣", "衬衫", "针织", "短款"]),
+def _taobao_text_match_bonus(query: str, title: str, plan_terms: list[str]) -> float:
+    title_lower = title.lower()
+    tokens = [
+        token.strip().lower()
+        for token in re.split(r"[\s,，/|]+", query)
+        if len(token.strip()) >= 2 and not token.startswith(("http://", "https://"))
     ]
-    for category, words in checks:
-        if any(word in lowered or word in query for word in words):
-            return category
-    return ProductCategory.top
+    tokens.extend(term.strip().lower() for term in plan_terms if len(term.strip()) >= 2)
+    matched = sum(1 for token in set(tokens) if token and token in title_lower)
+    return min(0.045, matched * 0.015)
 
 
-def _style_tags(query: str) -> list[str]:
-    tags = []
-    mapping = {
-        "commute": "通勤",
-        "office": "通勤",
-        "daily": "日常",
-        "casual": "休闲",
-        "date": "约会",
-        "travel": "旅行",
-        "party": "聚会",
-        "clean": "干净",
-        "minimal": "简约",
-        "elegant": "轻熟",
-        "soft": "温柔",
-        "cute": "可爱",
-        "preppy": "卡通",
-        "comfortable": "舒适",
-    }
-    for word, tag in mapping.items():
-        if word in query.lower() and tag not in tags:
-            tags.append(tag)
-    for tag in ["通勤", "日常", "约会", "旅行", "轻熟", "干净", "温柔", "显比例", "质感", "精致", "可爱", "休闲", "舒适", "卡通", "宽松"]:
-        if tag in query and tag not in tags:
-            tags.append(tag)
-    return tags or ["日常", "干净"]
-
-
-def _fit_tags(query: str) -> list[str]:
-    tags = []
-    mapping = {
-        "high waist": "高腰线",
-        "waist": "收腰",
-        "cropped": "短款",
-        "straight": "直筒",
-        "loose": "宽松",
-        "comfortable": "舒适",
-    }
-    for word, tag in mapping.items():
-        if word in query.lower() and tag not in tags:
-            tags.append(tag)
-    for tag in ["高腰", "高腰线", "收腰", "直筒", "短款", "显腿长", "利落", "垂感", "宽松", "舒适"]:
-        if tag in query and tag not in tags:
-            tags.append(tag)
-    return tags or ["线条干净"]
-
-
-def _color_tags(query: str) -> list[str]:
-    tags = []
-    mapping = {
-        "ivory": "ivory",
-        "cream": "cream",
-        "pink": "misty pink",
-        "denim": "denim",
-        "black": "black",
-        "gray": "gray",
-        "brown": "brown",
-        "白": "ivory",
-        "米": "cream",
-        "粉": "misty pink",
-        "蓝": "denim",
-        "黑": "black",
-        "灰": "gray",
-        "棕": "brown",
-    }
-    for source, target in mapping.items():
-        if source in query.lower() or source in query:
-            tags.append(target)
-    return tags or ["ivory", "denim", "black"]
+def _category_value(row: dict[str, Any], item_basic_info: dict[str, Any], *keys: str) -> str:
+    return _first_text(row, *keys) or _first_text(item_basic_info, *keys)
 
 
 def _price_for(category: ProductCategory, index: int, budget: Budget) -> float:

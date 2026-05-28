@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.providers.query_planner import ProductSearchPlan
 from app.schemas.domain import (
     OutfitCandidate,
     PreferenceConstraints,
@@ -17,7 +18,7 @@ class StyleGraphState(BaseModel):
     request: StyleTaskRequest
     profile: StyleProfile | None = None
     constraints: PreferenceConstraints | None = None
-    search_queries: list[str] = Field(default_factory=list)
+    search_queries: list[ProductSearchPlan] = Field(default_factory=list)
     raw_products: list[ProductCandidate] = Field(default_factory=list)
     normalized_products: list[ProductCandidate] = Field(default_factory=list)
     outfit_candidates: list[OutfitCandidate] = Field(default_factory=list)
@@ -30,4 +31,3 @@ class StyleGraphState(BaseModel):
     accepted_image: ImageCandidate | None = None
     user_message: str | None = None
     blocking_reason: str | None = None
-

@@ -2,6 +2,12 @@ package com.clothes.app
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -10,16 +16,50 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.net.HttpURLConnection
 import java.net.ProtocolException
 import java.net.URLEncoder
 import java.net.URL
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.max
+
+const val UploadMaxImageDimension = 2048
+const val UploadJpegQuality = 85
 
 class StyleApiException(val statusCode: Int, message: String) : IllegalStateException(message)
 
 fun Throwable.isUnauthorizedApiError(): Boolean = this is StyleApiException && statusCode == HttpURLConnection.HTTP_UNAUTHORIZED
+
+private data class PreparedUploadFile(
+    val fileName: String,
+    val mime: String,
+    val payload: ByteArray?,
+)
+
+fun calculateUploadImageSampleSize(width: Int, height: Int, maxDimension: Int = UploadMaxImageDimension): Int {
+    if (width <= 0 || height <= 0 || maxDimension <= 0) return 1
+    return max(1, ceil(max(width, height).toDouble() / maxDimension.toDouble()).toInt())
+}
+
+fun shouldReencodeUploadImage(
+    width: Int,
+    height: Int,
+    mime: String,
+    maxDimension: Int = UploadMaxImageDimension,
+): Boolean {
+    if (width <= 0 || height <= 0) return false
+    val isJpeg = mime.equals("image/jpeg", ignoreCase = true) || mime.equals("image/jpg", ignoreCase = true)
+    return !isJpeg || max(width, height) > maxDimension
+}
+
+fun compressedUploadFileName(fileName: String?): String {
+    val fallback = fileName?.takeIf { it.isNotBlank() } ?: "photo.jpg"
+    val base = fallback.substringBeforeLast('.', fallback).ifBlank { "photo" }
+    return "$base.jpg"
+}
 
 class StyleApi(
     private val context: Context,
@@ -312,13 +352,92 @@ class StyleApi(
     private fun writeFile(output: DataOutputStream, boundary: String, fieldName: String, uri: Uri) {
         val fileName = displayName(uri) ?: "photo.jpg"
         val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val upload = prepareImageUpload(uri, fileName, mime)
         output.writeBytes("--$boundary\r\n")
-        output.writeBytes("Content-Disposition: form-data; name=\"$fieldName\"; filename=\"$fileName\"\r\n")
-        output.writeBytes("Content-Type: $mime\r\n\r\n")
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            input.copyTo(output)
+        output.writeBytes("Content-Disposition: form-data; name=\"$fieldName\"; filename=\"${upload.fileName}\"\r\n")
+        output.writeBytes("Content-Type: ${upload.mime}\r\n\r\n")
+        if (upload.payload != null) {
+            output.write(upload.payload)
+        } else {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                input.copyTo(output)
+            }
         }
         output.writeBytes("\r\n")
+    }
+
+    private fun prepareImageUpload(uri: Uri, fileName: String, mime: String): PreparedUploadFile {
+        val compressed = compressedImageBytes(uri, mime)
+        return if (compressed == null) {
+            PreparedUploadFile(fileName = fileName, mime = mime, payload = null)
+        } else {
+            PreparedUploadFile(fileName = compressedUploadFileName(fileName), mime = "image/jpeg", payload = compressed)
+        }
+    }
+
+    private fun compressedImageBytes(uri: Uri, mime: String): ByteArray? {
+        if (!mime.startsWith("image/", ignoreCase = true)) return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, bounds)
+        }
+        if (!shouldReencodeUploadImage(bounds.outWidth, bounds.outHeight, mime)) return null
+
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = calculateUploadImageSampleSize(bounds.outWidth, bounds.outHeight)
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        var bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, options)
+        } ?: return null
+        bitmap = applyExifOrientation(uri, bitmap)
+        bitmap = flattenAlphaForJpeg(bitmap)
+
+        val output = ByteArrayOutputStream()
+        val encoded = bitmap.compress(Bitmap.CompressFormat.JPEG, UploadJpegQuality, output)
+        bitmap.recycle()
+        return output.toByteArray().takeIf { encoded && it.isNotEmpty() }
+    }
+
+    private fun applyExifOrientation(uri: Uri, bitmap: Bitmap): Bitmap {
+        val orientation = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                ExifInterface(input).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.preScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(270f)
+                matrix.preScale(-1f, 1f)
+            }
+            else -> return bitmap
+        }
+        return runCatching {
+            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).also {
+                if (it != bitmap) bitmap.recycle()
+            }
+        }.getOrElse { bitmap }
+    }
+
+    private fun flattenAlphaForJpeg(bitmap: Bitmap): Bitmap {
+        if (!bitmap.hasAlpha()) return bitmap
+        val flattened = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        Canvas(flattened).apply {
+            drawColor(Color.WHITE)
+            drawBitmap(bitmap, 0f, 0f, null)
+        }
+        bitmap.recycle()
+        return flattened
     }
 
     private fun displayName(uri: Uri): String? {

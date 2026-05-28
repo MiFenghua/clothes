@@ -38,7 +38,7 @@ class LocalObjectStorage:
 
 
 def _prepare_image_upload(payload: bytes, suffix: str, content_type: str | None) -> tuple[bytes, str]:
-    if not content_type or not content_type.startswith("image/") or len(payload) <= MAX_MODEL_IMAGE_BYTES:
+    if not content_type or not content_type.startswith("image/"):
         return payload, suffix
 
     try:
@@ -47,7 +47,13 @@ def _prepare_image_upload(payload: bytes, suffix: str, content_type: str | None)
     except (OSError, UnidentifiedImageError):
         return payload, suffix
 
-    image.thumbnail((MAX_MODEL_IMAGE_DIMENSION, MAX_MODEL_IMAGE_DIMENSION), Image.Resampling.LANCZOS)
+    needs_resize = max(image.size) > MAX_MODEL_IMAGE_DIMENSION
+    needs_reencode = needs_resize or len(payload) > MAX_MODEL_IMAGE_BYTES
+    if not needs_reencode:
+        return payload, suffix
+
+    if needs_resize:
+        image.thumbnail((MAX_MODEL_IMAGE_DIMENSION, MAX_MODEL_IMAGE_DIMENSION), Image.Resampling.LANCZOS)
     image = _jpeg_compatible(image)
 
     best_payload = payload

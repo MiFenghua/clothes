@@ -10,7 +10,7 @@ from typing import Protocol
 from pydantic import BaseModel, Field
 
 from app.config import Settings
-from app.schemas.domain import PhotoQuality, StyleProfile, StyleTaskRequest
+from app.schemas.domain import StyleProfile, StyleTaskRequest
 from app.schemas.quality import ImageCandidate
 
 
@@ -120,6 +120,7 @@ class ArkPhotoProfileProvider(PhotoProfileProvider):
 
 class ArkImageQualityScoringProvider(ImageQualityScoringProvider):
     def __init__(self, settings: Settings) -> None:
+        self.settings = settings
         self.vision = ArkVisionClient(settings)
 
     async def score_candidates(
@@ -130,17 +131,21 @@ class ArkImageQualityScoringProvider(ImageQualityScoringProvider):
         candidates: list[ImageCandidate],
         product_image_urls: list[str],
     ) -> dict[str, dict[str, float]]:
-        scores: dict[str, dict[str, float]] = {}
         user_photo = self.vision.local_or_remote_image(request)
         product_refs = product_image_urls[:6]
-        for candidate in candidates:
-            payload = await self.vision.create_json(
-                prompt=self._prompt(candidate),
-                image_urls=[user_photo, candidate.image_url, *product_refs],
-            )
-            parsed = ImageQualityScores.model_validate(payload)
-            scores[candidate.candidate_id] = parsed.model_dump()
-        return scores
+        concurrency = max(1, min(len(candidates), self.settings.image_quality_concurrency))
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def score_one(candidate: ImageCandidate) -> tuple[str, dict[str, float]]:
+            async with semaphore:
+                payload = await self.vision.create_json(
+                    prompt=self._prompt(candidate),
+                    image_urls=[user_photo, candidate.image_url, *product_refs],
+                )
+                parsed = ImageQualityScores.model_validate(payload)
+                return candidate.candidate_id, parsed.model_dump()
+
+        return dict(await asyncio.gather(*(score_one(candidate) for candidate in candidates)))
 
     def _prompt(self, candidate: ImageCandidate) -> str:
         return f"""你是 AI 试穿图质检员。

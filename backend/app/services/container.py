@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 
 from app.agents.graph import StyleAgentGraph
@@ -8,6 +7,7 @@ from app.config import get_settings
 from app.providers.auth import AuthStore
 from app.providers.google_auth import GoogleOAuthIdTokenVerifier
 from app.providers.image import ArkSeedreamImageProvider, LocalTryOnImageProvider, TryOnImageProvider
+from app.providers.outfit_planner import ArkOutfitPlanner, OutfitPlanner
 from app.providers.persistence import (
     FavoritesRepository,
     InMemoryFavoritesRepository,
@@ -47,7 +47,7 @@ class AppContainer:
         self.settings = get_settings()
         self.storage = LocalObjectStorage(self.settings)
         self.postgres_database: PostgresDatabase | None = (
-            PostgresDatabase(self.settings.postgres_dsn) if self.settings.postgres_dsn else None
+            PostgresDatabase(self.settings.postgres_dsn) if _postgres_dsn_enabled(self.settings.postgres_dsn) else None
         )
         self.tracer: TraceRecorder
         self.auth_store: AuthStore | PostgresAuthStore
@@ -77,6 +77,7 @@ class AppContainer:
         self.google_id_token_verifier = GoogleOAuthIdTokenVerifier(self.settings.google_client_id)
         self.photo_provider = self._create_photo_provider()
         self.query_planner = self._create_query_planner()
+        self.outfit_planner = self._create_outfit_planner()
         self.search_provider = self._create_search_provider()
         self.image_provider = self._create_image_provider()
         self.image_quality_provider = self._create_image_quality_provider()
@@ -91,6 +92,7 @@ class AppContainer:
             image_provider=self.image_provider,
             photo_provider=self.photo_provider,
             query_planner=self.query_planner,
+            outfit_planner=self.outfit_planner,
             image_quality_provider=self.image_quality_provider,
             wardrobe_products=self.wardrobe_repository.products_for_ids,
         )
@@ -115,9 +117,6 @@ class AppContainer:
         providers: list[ProductSearchProvider] = []
         for name in provider_names:
             if name in {"taobao_union", "taobao", "tbk"}:
-                if not self._taobao_union_configured() and os.getenv("STYLE_BACKEND_SEARCH_PROVIDER") is None:
-                    providers.append(LocalDemoSearchProvider())
-                    continue
                 providers.append(TaobaoUnionProductSearchProvider(self.settings))
             elif name in {"local", "local_demo"}:
                 providers.append(LocalDemoSearchProvider())
@@ -128,16 +127,14 @@ class AppContainer:
             return providers[0]
         return CompositeProductSearchProvider(providers)
 
-    def _taobao_union_configured(self) -> bool:
-        return bool(
-            self.settings.taobao_union_app_key
-            and self.settings.taobao_union_app_secret
-            and self.settings.taobao_union_adzone_id
-        )
-
     def _create_query_planner(self) -> SearchQueryPlanner | None:
         if self.settings.model_provider == "ark" and self.settings.ark_api_key:
             return ArkSearchQueryPlanner(self.settings)
+        return None
+
+    def _create_outfit_planner(self) -> OutfitPlanner | None:
+        if self.settings.model_provider == "ark" and self.settings.ark_api_key:
+            return ArkOutfitPlanner(self.settings)
         return None
 
     def _create_image_provider(self) -> TryOnImageProvider:
@@ -154,3 +151,7 @@ class AppContainer:
 @lru_cache
 def get_container() -> AppContainer:
     return AppContainer()
+
+
+def _postgres_dsn_enabled(dsn: str | None) -> bool:
+    return bool(dsn and dsn.strip().lower() not in {"memory", "local", "none", "null", "disabled", "off"})
