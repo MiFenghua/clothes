@@ -10,6 +10,9 @@ REMOVED_RUNTIME_PATHS = [
     "server",
     "miniprogram",
     "dist/server",
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
     "scripts/amazon-login.mjs",
     "scripts/taobao-login.mjs",
 ]
@@ -98,6 +101,11 @@ def test_old_node_runtime_paths_are_removed() -> None:
     assert existing == [], f"Remove old Node runtime paths: {existing}"
 
 
+def test_root_node_package_files_are_guarded_as_removed_paths() -> None:
+    required = {"package.json", "package-lock.json", "tsconfig.json"}
+    assert required <= set(REMOVED_RUNTIME_PATHS)
+
+
 def test_root_package_json_no_longer_describes_node_backend() -> None:
     package_json = ROOT / "package.json"
     if not package_json.exists():
@@ -145,6 +153,7 @@ def test_env_example_is_python_backend_focused() -> None:
     assert remaining == [], f"Remove unprefixed old Node env keys: {remaining}"
 
     assert "STYLE_BACKEND_MODEL_PROVIDER=ark" in env_example, "Document Python model provider env"
+    assert "STYLE_BACKEND_SEARCH_PROVIDER=local_demo" in env_example, "Default local startup to demo search"
     assert "STYLE_BACKEND_ARK_VISION_MODEL=" in env_example, "Document Python Ark vision model env"
     assert "STYLE_BACKEND_ARK_IMAGE_MODEL=" in env_example, "Document Python Ark image model env"
 

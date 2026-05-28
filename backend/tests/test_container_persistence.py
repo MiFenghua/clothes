@@ -15,6 +15,7 @@ from app.providers.postgres import (
     PostgresTraceRecorder,
     PostgresWardrobeRepository,
 )
+from app.providers.search import LocalDemoSearchProvider
 from app.services.container import AppContainer, get_container
 
 
@@ -52,6 +53,22 @@ def test_container_uses_local_persistence_without_postgres_dsn(
     assert isinstance(container.task_service.repository, InMemoryTaskRepository)
     assert isinstance(container.task_service.wardrobe_repository, InMemoryWardrobeRepository)
     assert isinstance(container.task_service.favorites_repository, InMemoryFavoritesRepository)
+
+
+def test_container_defaults_to_local_demo_search_without_taobao_credentials(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    configure_storage_paths(monkeypatch, tmp_path)
+    monkeypatch.delenv("STYLE_BACKEND_SEARCH_PROVIDER", raising=False)
+    monkeypatch.delenv("STYLE_BACKEND_TAOBAO_UNION_APP_KEY", raising=False)
+    monkeypatch.delenv("STYLE_BACKEND_TAOBAO_UNION_APP_SECRET", raising=False)
+    monkeypatch.delenv("STYLE_BACKEND_TAOBAO_UNION_ADZONE_ID", raising=False)
+    get_container.cache_clear()
+    get_settings.cache_clear()
+
+    container = get_container()
+
+    assert isinstance(container.search_provider, LocalDemoSearchProvider)
 
 
 def test_container_uses_local_persistence_when_postgres_dsn_is_memory(

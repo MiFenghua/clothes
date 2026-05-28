@@ -112,7 +112,7 @@ class AppContainer:
     def _create_search_provider(self) -> ProductSearchProvider:
         provider_names = [name.strip() for name in self.settings.search_provider.split(",") if name.strip()]
         if not provider_names:
-            provider_names = ["taobao_union"]
+            provider_names = ["local_demo"]
 
         providers: list[ProductSearchProvider] = []
         for name in provider_names:

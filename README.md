@@ -51,7 +51,7 @@ STYLE_BACKEND_TAOBAO_UNION_APP_SECRET=...
 STYLE_BACKEND_TAOBAO_UNION_ADZONE_ID=...
 ```
 
-Without an Ark key, local deterministic providers keep the backend runnable for development and tests.
+The example env defaults to `STYLE_BACKEND_SEARCH_PROVIDER=local_demo`, so the backend starts without Taobao Union credentials. Without an Ark key, local deterministic providers keep the backend runnable for development and tests.
 
 ## Android App
 

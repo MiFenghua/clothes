@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     auth_session_max_age_days: int = 30
     temporal_address: str = "127.0.0.1:7233"
     temporal_task_queue: str = "clothes-style-tasks"
-    search_provider: str = "taobao_union"
+    search_provider: str = "local_demo"
     image_provider: str = "ark"
     model_provider: str = "ark"
     recommendation_threshold: float = 0.82

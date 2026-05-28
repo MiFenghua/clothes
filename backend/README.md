@@ -18,6 +18,8 @@ and try-on image quality can be traced, evaluated, and improved.
 The local implementation ships with deterministic providers so the pipeline is runnable
 without paid model/search integrations. Production providers should implement the same
 interfaces and can be selected by configuration.
+The default search provider is `local_demo`; select `taobao_union` only when
+Taobao Union credentials are configured.
 
 ## Provider Configuration
 
