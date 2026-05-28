@@ -65,6 +65,22 @@ OLD_NODE_BACKEND_PACKAGE_MARKERS = [
 ]
 
 
+OLD_README_RUNTIME_MARKERS = [
+    "Node.js/TypeScript Demo 后端",
+    "Node backend",
+    "Node Demo",
+    "server/src",
+    "npm run dev",
+    "npm start",
+    "微信原生小程序",
+    "小程序配置",
+    "mini program",
+    "miniprogram/",
+    "127.0.0.1:3000",
+    "localhost:3000",
+]
+
+
 def read_text(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
@@ -127,7 +143,6 @@ def test_root_readme_documents_python_only_runtime() -> None:
     assert (
         "uvicorn app.main:app --reload --port 8000" in readme
     ), "README must document the Python backend startup command"
-    assert "server/src" not in readme, "Remove old Node server source docs from README"
-    assert "Node Demo" not in readme, "Remove old Node demo docs from README"
-    assert "miniprogram/" not in readme, "Remove old mini program docs from README"
-    assert "127.0.0.1:3000" not in readme, "Remove old Node port from README"
+
+    remaining = [marker for marker in OLD_README_RUNTIME_MARKERS if marker in readme]
+    assert remaining == [], f"Remove old runtime docs from README: {remaining}"
