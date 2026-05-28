@@ -5,13 +5,6 @@ dist/
 .superpowers/
 artifacts/
 storage/
-server/storage/uploads/*
-server/storage/generated/*
-server/storage/auth-store.json
-server/storage/amazon-browser-profile/
-server/storage/taobao-browser-profile/
-!server/storage/uploads/.gitkeep
-!server/storage/generated/.gitkeep
 npm-debug.log*
 __pycache__/
 *.py[cod]

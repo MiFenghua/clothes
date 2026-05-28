@@ -122,6 +122,22 @@ def test_python_static_debug_app_has_no_node_internal_routes() -> None:
     assert "localhost:3000" not in combined, "Remove old Node localhost URL from static debug app"
 
 
+def test_root_web_debug_app_does_not_call_removed_node_routes() -> None:
+    root_web = ROOT / "web"
+    if not root_web.exists():
+        return
+
+    combined = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in root_web.rglob("*")
+        if path.is_file()
+    )
+
+    assert "/internal/search-products" not in combined, "Remove old Node product search route"
+    assert "127.0.0.1:3000" not in combined, "Remove old Node port from root web app"
+    assert "localhost:3000" not in combined, "Remove old Node localhost URL from root web app"
+
+
 def test_env_example_is_python_backend_focused() -> None:
     env_example = read_text(".env.example")
 
